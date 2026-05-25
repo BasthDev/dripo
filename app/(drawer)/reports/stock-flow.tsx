@@ -1,0 +1,75 @@
+import React from 'react';
+import { View, StyleSheet, FlatList, Text } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Header, Colors, Spacing, Typography, Radius } from '../../../components/ui';
+import { usePosStore } from '../../../store/usePosStore';
+
+export default function StockFlowScreen() {
+  const router = useRouter();
+  const { movements, ingredients } = usePosStore();
+
+  const sortedMovements = [...movements].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  return (
+    <View style={styles.container}>
+      <Header title="Stock Flow" subtitle="Inventory Activity Log" onBack={() => router.back()} />
+      {sortedMovements.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>No inventory movements found.</Text>
+        </View>
+      ) : (
+        <FlatList
+          contentContainerStyle={styles.list}
+          data={sortedMovements}
+          keyExtractor={m => m.id}
+          renderItem={({ item }) => {
+            const ing = ingredients.find(i => i.id === item.ingredientId);
+            const dateStr = new Date(item.timestamp).toLocaleString(undefined, {
+              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+            const unit = ing ? (ing.type === 'WEIGHT' ? 'g' : ing.type === 'VOLUME' ? 'ml' : 'pcs') : 'units';
+            const isOut = item.type === 'OUT';
+
+            return (
+              <View style={styles.row}>
+                <View style={styles.left}>
+                  <Text style={styles.ingName}>{ing ? ing.name : 'Deleted Ingredient'}</Text>
+                  <Text style={styles.meta}>{dateStr} • {item.reason}</Text>
+                </View>
+                <View style={styles.right}>
+                  <Text style={[styles.qty, { color: isOut ? Colors.error : Colors.success }]}>
+                    {item.quantityDiff > 0 ? '+' : ''}{item.quantityDiff} {unit}
+                  </Text>
+                  {item.note && <Text style={styles.note}>{item.note}</Text>}
+                </View>
+              </View>
+            );
+          }}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
+        />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.background },
+  list: { padding: Spacing.lg },
+  empty: { flex: 1, padding: Spacing.lg, justifyContent: 'center', alignItems: 'center' },
+  emptyText: { color: Colors.textMuted },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surface,
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+  },
+  left: { flex: 1, paddingRight: Spacing.md },
+  ingName: { color: Colors.text, fontSize: Typography.md, fontWeight: '600' },
+  meta: { color: Colors.textMuted, fontSize: Typography.xs, marginTop: 4 },
+  right: { alignItems: 'flex-end', justifyContent: 'center' },
+  qty: { fontSize: Typography.lg, fontWeight: '800' },
+  note: { color: Colors.textSecondary, fontSize: 10, marginTop: 2, fontStyle: 'italic' }
+});

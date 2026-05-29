@@ -1,11 +1,27 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, FlatList, useWindowDimensions } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Header, Button, InputField, Colors, Spacing, Typography, Radius } from '../../../components/ui';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+  FlatList,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import uuid from 'react-native-uuid';
+import {
+  Button,
+  Colors,
+  Header,
+  InputField,
+  Radius,
+  Spacing,
+  Typography,
+} from '../../../components/ui';
 import { useCartStore } from '../../../store/useCartStore';
 import { usePosStore } from '../../../store/usePosStore';
-import uuid from 'react-native-uuid';
 import { printReceipt } from '../../../utils/bluetoothPrinter';
 
 type PaymentMethod = 'CASH' | 'QRIS' | 'CARD';
@@ -13,15 +29,18 @@ type PaymentMethod = 'CASH' | 'QRIS' | 'CARD';
 export default function PaymentScreen() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
-  
-  const { getTotal, clearCart, items, orderNote, setOrderNote } = useCartStore();
+
+  const { getTotal, clearCart, items, orderNote, setOrderNote } =
+    useCartStore();
+
   const { addTransaction, getRecipeCost } = usePosStore();
-  
+
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [cashGiven, setCashGiven] = useState('');
   const [localOrderNote, setLocalOrderNote] = useState(orderNote);
-  
+
   const [isPaid, setIsPaid] = useState(false);
+
   const [successData, setSuccessData] = useState<{
     total: number;
     change: number;
@@ -32,28 +51,31 @@ export default function PaymentScreen() {
   const total = getTotal();
   const cashParsed = parseFloat(cashGiven) || 0;
   const change = Math.max(0, cashParsed - total);
-  
+
   const canPay = method !== 'CASH' || cashParsed >= total;
+
   const isLandscape = width > height;
   const isTablet = width >= 768;
   const showSplit = isLandscape || isTablet;
 
   const handleConfirm = async () => {
     if (!canPay) return;
-    
+
     const txId = uuid.v4() as string;
     const timestamp = new Date().toISOString();
-    
-    // Process Transaction for store
+
     const txItems = items.map(cartItem => {
       let cost = 0;
+
       if (cartItem.product.useHpp && cartItem.product.hppId) {
         cost = getRecipeCost(cartItem.product.hppId) || 0;
       } else if (!cartItem.product.useHpp) {
         cost = cartItem.product.buyPrice || 0;
       }
-      
-      const category = usePosStore.getState().categories.find(c => c.id === cartItem.product.categoryId);
+
+      const category = usePosStore
+        .getState()
+        .categories.find(c => c.id === cartItem.product.categoryId);
 
       return {
         productId: cartItem.product.id,
@@ -68,6 +90,7 @@ export default function PaymentScreen() {
     });
 
     const trimmedOrderNote = localOrderNote.trim();
+
     const tx = {
       id: txId,
       timestamp,
@@ -79,11 +102,10 @@ export default function PaymentScreen() {
       orderNote: trimmedOrderNote || undefined,
     };
 
-    // Save transaction
     addTransaction(tx);
-    
-    // Auto-print receipt if printer is connected
+
     const { connectedPrinter, storeSettings } = usePosStore.getState();
+
     if (connectedPrinter) {
       try {
         await printReceipt(tx, storeSettings);
@@ -91,74 +113,137 @@ export default function PaymentScreen() {
         console.error('[Payment] Auto-print error:', err);
       }
     }
-    
-    // Set success data and flag
+
     const finalChange = method === 'CASH' ? change : 0;
-    const finalItemsCount = items.reduce((sum, i) => sum + i.quantity, 0);
-    
+
+    const finalItemsCount = items.reduce(
+      (sum, i) => sum + i.quantity,
+      0,
+    );
+
     setSuccessData({
       total,
       change: finalChange,
       itemsCount: finalItemsCount,
-      method
+      method,
     });
-    
+
     setIsPaid(true);
     clearCart();
   };
 
   const renderCartSummary = () => {
-    const itemsCount = items.reduce((sum, i) => sum + i.quantity, 0);
+    const itemsCount = items.reduce(
+      (sum, i) => sum + i.quantity,
+      0,
+    );
+
     return (
       <View style={styles.cartContainer}>
         <View style={styles.cartHeader}>
           <View style={styles.cartHeaderLeft}>
-            <Ionicons name="cart-outline" size={22} color={Colors.text} />
-            <Text style={styles.cartTitle}>Order Summary</Text>
+            <Ionicons
+              name="cart-outline"
+              size={22}
+              color={Colors.text}
+            />
+
+            <Text style={styles.cartTitle}>
+              Order Summary
+            </Text>
           </View>
+
           <View style={styles.cartBadge}>
-            <Text style={styles.cartBadgeText}>{itemsCount}</Text>
+            <Text style={styles.cartBadgeText}>
+              {itemsCount}
+            </Text>
           </View>
         </View>
-        
+
         <FlatList
           data={items}
-          keyExtractor={(item) => item.cartItemId}
+          keyExtractor={item => item.cartItemId}
           contentContainerStyle={styles.cartList}
           renderItem={({ item }) => (
             <View style={styles.cartItem}>
               <View style={styles.cartItemLeft}>
-                <Text style={styles.cartItemName} numberOfLines={1}>{item.product.name}</Text>
-                <Text style={styles.cartItemDetails}>
-                  {item.quantity} x Rp {item.product.sellPrice.toLocaleString()}
+                <Text
+                  style={styles.cartItemName}
+                  numberOfLines={1}
+                >
+                  {item.product.name}
                 </Text>
+
+                <Text style={styles.cartItemDetails}>
+                  {item.quantity} x Rp{' '}
+                  {item.product.sellPrice.toLocaleString()}
+                </Text>
+
                 {item.note ? (
-                  <Text style={styles.cartItemNote} numberOfLines={2}>
+                  <Text
+                    style={styles.cartItemNote}
+                    numberOfLines={2}
+                  >
                     Note: {item.note}
                   </Text>
                 ) : null}
               </View>
+
               <Text style={styles.cartItemTotal}>
-                Rp {(item.product.sellPrice * item.quantity).toLocaleString()}
+                Rp{' '}
+                {(
+                  item.product.sellPrice * item.quantity
+                ).toLocaleString()}
               </Text>
             </View>
           )}
           ListEmptyComponent={() => (
             <View style={styles.emptyCartContainer}>
-              <Ionicons name="basket-outline" size={40} color={Colors.textMuted} />
-              <Text style={styles.emptyText}>No items in cart</Text>
+              <Ionicons
+                name="basket-outline"
+                size={40}
+                color={Colors.textMuted}
+              />
+
+              <Text style={styles.emptyText}>
+                No items in cart
+              </Text>
             </View>
           )}
         />
 
         <View style={styles.cartTotalSection}>
           <View style={styles.totalRow}>
-            <Text style={styles.totalRowLabel}>Subtotal</Text>
-            <Text style={styles.totalRowVal}>Rp {total.toLocaleString()}</Text>
+            <Text style={styles.totalRowLabel}>
+              Subtotal
+            </Text>
+
+            <Text style={styles.totalRowVal}>
+              Rp {total.toLocaleString()}
+            </Text>
           </View>
-          <View style={[styles.totalRow, { marginTop: Spacing.sm }]}>
-            <Text style={[styles.totalRowLabel, { fontWeight: '700', color: Colors.text }]}>Total Due</Text>
-            <Text style={styles.totalDueVal}>Rp {total.toLocaleString()}</Text>
+
+          <View
+            style={[
+              styles.totalRow,
+              { marginTop: Spacing.sm },
+            ]}
+          >
+            <Text
+              style={[
+                styles.totalRowLabel,
+                {
+                  fontWeight: '700',
+                  color: Colors.text,
+                },
+              ]}
+            >
+              Total Due
+            </Text>
+
+            <Text style={styles.totalDueVal}>
+              Rp {total.toLocaleString()}
+            </Text>
           </View>
         </View>
       </View>
@@ -167,53 +252,83 @@ export default function PaymentScreen() {
 
   const renderSuccessUI = () => {
     if (!successData) return null;
+
     return (
       <View style={styles.successContainer}>
         <View style={styles.circle}>
-          <Ionicons name="checkmark" size={50} color={Colors.white} />
+          <Ionicons
+            name="checkmark"
+            size={50}
+            color={Colors.white}
+          />
         </View>
-        
-        <Text style={styles.successTitle}>Payment Successful</Text>
-        <Text style={styles.successSubtitle}>Order has been recorded successfully.</Text>
-        
+
+        <Text style={styles.successTitle}>
+          Payment Successful
+        </Text>
+
+        <Text style={styles.successSubtitle}>
+          Order has been recorded successfully.
+        </Text>
+
         <View style={styles.gridContainer}>
           <View style={styles.gridRow}>
             <View style={styles.gridItem}>
-              <Text style={styles.gridLabel}>Total Amount</Text>
-              <Text style={styles.gridValue}>Rp {successData.total.toLocaleString()}</Text>
+              <Text style={styles.gridLabel}>
+                Total Amount
+              </Text>
+
+              <Text style={styles.gridValue}>
+                Rp {successData.total.toLocaleString()}
+              </Text>
             </View>
+
             <View style={styles.gridItemRight}>
-              <Text style={styles.gridLabel}>Change</Text>
-              <Text style={styles.gridValue}>Rp {successData.change.toLocaleString()}</Text>
+              <Text style={styles.gridLabel}>
+                Change
+              </Text>
+
+              <Text style={styles.gridValue}>
+                Rp {successData.change.toLocaleString()}
+              </Text>
             </View>
           </View>
-          
-          <View style={[styles.separator, { marginVertical: Spacing.md }]} />
+
+          <View
+            style={[
+              styles.separator,
+              { marginVertical: Spacing.md },
+            ]}
+          />
 
           <View style={styles.gridRow}>
             <View style={styles.gridItem}>
-              <Text style={styles.gridLabel}>Total Items</Text>
-              <Text style={styles.gridValue}>{successData.itemsCount} items</Text>
+              <Text style={styles.gridLabel}>
+                Total Items
+              </Text>
+
+              <Text style={styles.gridValue}>
+                {successData.itemsCount} items
+              </Text>
             </View>
+
             <View style={styles.gridItemRight}>
-              <Text style={styles.gridLabel}>Payment Type</Text>
-              <Text style={styles.gridValue}>{successData.method}</Text>
+              <Text style={styles.gridLabel}>
+                Payment Type
+              </Text>
+
+              <Text style={styles.gridValue}>
+                {successData.method}
+              </Text>
             </View>
           </View>
         </View>
-        
+
         <View style={styles.actionGroup}>
-          <Button 
-            label="New Order" 
-            variant="primary" 
-            iconLeft="add-circle-outline"
+          <Button
+            label="Continue"
+            variant="primary"
             onPress={() => router.replace('/pos')}
-            style={styles.btn}
-          />
-          <Button 
-            label="Back to Dashboard" 
-            variant="outline" 
-            onPress={() => router.replace('/(drawer)')}
             style={styles.btn}
           />
         </View>
@@ -223,52 +338,146 @@ export default function PaymentScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title={isPaid ? "Receipt" : "Payment"} onBack={isPaid ? undefined : () => router.back()} />
-      
-      <View style={[styles.bodyLayout, showSplit && styles.rowLayout]}>
-        {/* Left Panel: Payment form */}
+      <View
+        style={[
+          styles.bodyLayout,
+          showSplit && styles.rowLayout,
+        ]}
+      >
+        {/* LEFT PANEL */}
         {(!isPaid || showSplit) && (
-          <View style={[
-            styles.paymentPanel,
-            showSplit && { flex: 1.2 },
-            isPaid && { opacity: 0.55, pointerEvents: 'none' }
-          ]}>
+          <View
+            style={[
+              styles.paymentPanel,
+
+              showSplit && {
+                flex: 1.2,
+              },
+
+              isPaid &&
+                !showSplit && {
+                  opacity: 0.55,
+                  pointerEvents: 'none',
+                },
+            ]}
+          >
+            {/* HEADER ONLY LEFT PANEL */}
+            {(!isPaid || showSplit) && (
+              <Header
+                title="Payment"
+                onBack={() => router.back()}
+              />
+            )}
+
             <ScrollView contentContainerStyle={styles.content}>
               <View style={styles.totalBox}>
-                <Text style={styles.totalLabel}>Amount Due</Text>
-                <Text style={styles.totalValue}>Rp {total.toLocaleString()}</Text>
+                <Text style={styles.totalLabel}>
+                  Amount Due
+                </Text>
+
+                <Text style={styles.totalValue}>
+                  Rp {total.toLocaleString()}
+                </Text>
               </View>
 
-              <Text style={styles.sectionTitle}>Payment Method</Text>
+              <Text style={styles.sectionTitle}>
+                Payment Method
+              </Text>
+
               <View style={styles.methodsRow}>
-                <TouchableOpacity 
-                  style={[styles.methodBtn, method === 'CASH' && styles.methodActive]} 
+                <TouchableOpacity
+                  style={[
+                    styles.methodBtn,
+                    method === 'CASH' &&
+                      styles.methodActive,
+                  ]}
                   onPress={() => setMethod('CASH')}
                 >
-                  <Ionicons name="cash-outline" size={24} color={method === 'CASH' ? Colors.primary : Colors.textMuted} />
-                  <Text style={[styles.methodText, method === 'CASH' && styles.methodTextActive]}>Cash</Text>
+                  <Ionicons
+                    name="cash-outline"
+                    size={24}
+                    color={
+                      method === 'CASH'
+                        ? Colors.primary
+                        : Colors.textMuted
+                    }
+                  />
+
+                  <Text
+                    style={[
+                      styles.methodText,
+                      method === 'CASH' &&
+                        styles.methodTextActive,
+                    ]}
+                  >
+                    Cash
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.methodBtn, method === 'QRIS' && styles.methodActive]} 
+
+                <TouchableOpacity
+                  style={[
+                    styles.methodBtn,
+                    method === 'QRIS' &&
+                      styles.methodActive,
+                  ]}
                   onPress={() => setMethod('QRIS')}
                 >
-                  <Ionicons name="qr-code-outline" size={24} color={method === 'QRIS' ? Colors.primary : Colors.textMuted} />
-                  <Text style={[styles.methodText, method === 'QRIS' && styles.methodTextActive]}>QRIS</Text>
+                  <Ionicons
+                    name="qr-code-outline"
+                    size={24}
+                    color={
+                      method === 'QRIS'
+                        ? Colors.primary
+                        : Colors.textMuted
+                    }
+                  />
+
+                  <Text
+                    style={[
+                      styles.methodText,
+                      method === 'QRIS' &&
+                        styles.methodTextActive,
+                    ]}
+                  >
+                    QRIS
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.methodBtn, method === 'CARD' && styles.methodActive]} 
+
+                <TouchableOpacity
+                  style={[
+                    styles.methodBtn,
+                    method === 'CARD' &&
+                      styles.methodActive,
+                  ]}
                   onPress={() => setMethod('CARD')}
                 >
-                  <Ionicons name="card-outline" size={24} color={method === 'CARD' ? Colors.primary : Colors.textMuted} />
-                  <Text style={[styles.methodText, method === 'CARD' && styles.methodTextActive]}>Card</Text>
+                  <Ionicons
+                    name="card-outline"
+                    size={24}
+                    color={
+                      method === 'CARD'
+                        ? Colors.primary
+                        : Colors.textMuted
+                    }
+                  />
+
+                  <Text
+                    style={[
+                      styles.methodText,
+                      method === 'CARD' &&
+                        styles.methodTextActive,
+                    ]}
+                  >
+                    Card
+                  </Text>
                 </TouchableOpacity>
               </View>
 
               <InputField
                 label="Order Note (optional)"
-                placeholder="e.g. Take away, table 5, customer name..."
+                placeholder="e.g. Take away, table 5..."
                 value={localOrderNote}
-                onChangeText={(t) => {
+                onChangeText={t => {
                   setLocalOrderNote(t);
                   setOrderNote(t);
                 }}
@@ -287,13 +496,32 @@ export default function PaymentScreen() {
                     onChangeText={setCashGiven}
                     iconLeft="wallet-outline"
                   />
+
                   {cashParsed > 0 && (
                     <View style={styles.changeBox}>
-                      <Text style={styles.changeLabel}>Change Summary</Text>
+                      <Text style={styles.changeLabel}>
+                        Change Summary
+                      </Text>
+
                       <View style={styles.changeRow}>
-                        <Text style={styles.changeText}>Expected Change:</Text>
-                        <Text style={[styles.changeVal, { color: cashParsed >= total ? Colors.success : Colors.error }]}>
-                          {cashParsed >= total ? `Rp ${change.toLocaleString()}` : 'Not enough cash'}
+                        <Text style={styles.changeText}>
+                          Expected Change:
+                        </Text>
+
+                        <Text
+                          style={[
+                            styles.changeVal,
+                            {
+                              color:
+                                cashParsed >= total
+                                  ? Colors.success
+                                  : Colors.error,
+                            },
+                          ]}
+                        >
+                          {cashParsed >= total
+                            ? `Rp ${change.toLocaleString()}`
+                            : 'Not enough cash'}
                         </Text>
                       </View>
                     </View>
@@ -304,9 +532,13 @@ export default function PaymentScreen() {
 
             {!isPaid && (
               <View style={styles.footer}>
-                <Button 
-                  label={method === 'CASH' ? `Confirm Payment (Change: Rp ${change.toLocaleString()})` : "Confirm Payment"} 
-                  variant="primary" 
+                <Button
+                  label={
+                    method === 'CASH'
+                      ? `Confirm Payment (Change: Rp ${change.toLocaleString()})`
+                      : 'Confirm Payment'
+                  }
+                  variant="primary"
                   fullWidth
                   disabled={!canPay}
                   onPress={handleConfirm}
@@ -316,14 +548,27 @@ export default function PaymentScreen() {
           </View>
         )}
 
-        {/* Right Panel / Success Screen overlay */}
+        {/* RIGHT PANEL */}
         {(isPaid || showSplit) && (
-          <View style={[
-            styles.rightPanel,
-            showSplit && { flex: 1, borderLeftWidth: 1, borderLeftColor: Colors.surfaceBorder },
-            !showSplit && { flex: 1 }
-          ]}>
-            {isPaid ? renderSuccessUI() : renderCartSummary()}
+          <View
+            style={[
+              styles.rightPanel,
+
+              showSplit && {
+                flex: 1,
+                borderLeftWidth: 1,
+                borderLeftColor:
+                  Colors.surfaceBorder,
+              },
+
+              !showSplit && {
+                flex: 1,
+              },
+            ]}
+          >
+            {isPaid
+              ? renderSuccessUI()
+              : renderCartSummary()}
           </View>
         )}
       </View>
@@ -332,13 +577,34 @@ export default function PaymentScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  bodyLayout: { flex: 1 },
-  rowLayout: { flexDirection: 'row' },
-  paymentPanel: { flex: 1, backgroundColor: Colors.background },
-  rightPanel: { flex: 1, backgroundColor: Colors.surface },
-  content: { padding: Spacing.lg, gap: Spacing.xl },
-  
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+
+  bodyLayout: {
+    flex: 1,
+  },
+
+  rowLayout: {
+    flexDirection: 'row',
+  },
+
+  paymentPanel: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+
+  rightPanel: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+  },
+
+  content: {
+    padding: Spacing.lg,
+    gap: Spacing.xl,
+  },
+
   totalBox: {
     backgroundColor: Colors.surfaceElevated,
     padding: Spacing.xxl,
@@ -348,10 +614,29 @@ const styles = StyleSheet.create({
     borderColor: Colors.surfaceBorder,
     gap: Spacing.sm,
   },
-  totalLabel: { color: Colors.textSecondary, fontSize: Typography.md },
-  totalValue: { color: Colors.text, fontSize: Typography.xxxl, fontWeight: '800' },
-  sectionTitle: { color: Colors.text, fontSize: Typography.md, fontWeight: '700' },
-  methodsRow: { flexDirection: 'row', gap: Spacing.md },
+
+  totalLabel: {
+    color: Colors.textSecondary,
+    fontSize: Typography.md,
+  },
+
+  totalValue: {
+    color: Colors.text,
+    fontSize: Typography.xxxl,
+    fontWeight: '800',
+  },
+
+  sectionTitle: {
+    color: Colors.text,
+    fontSize: Typography.md,
+    fontWeight: '700',
+  },
+
+  methodsRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+
   methodBtn: {
     flex: 1,
     backgroundColor: Colors.surface,
@@ -362,29 +647,90 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  methodActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '11' },
-  methodText: { color: Colors.textMuted, fontSize: Typography.sm, fontWeight: '600' },
-  methodTextActive: { color: Colors.primary },
-  cashSection: { gap: Spacing.md },
-  changeBox: { backgroundColor: Colors.surface, padding: Spacing.md, borderRadius: Radius.md, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.surfaceBorder },
-  changeLabel: { color: Colors.text, fontWeight: '600', marginBottom: Spacing.sm },
-  changeRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  changeText: { color: Colors.textSecondary, fontSize: Typography.sm },
-  changeVal: { fontSize: Typography.md, fontWeight: '700' },
-  footer: { padding: Spacing.lg, borderTopWidth: 1, borderTopColor: Colors.surfaceBorder, backgroundColor: Colors.background },
 
-  // Cart summary panel
-  cartContainer: { flex: 1, backgroundColor: Colors.surface },
+  methodActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '11',
+  },
+
+  methodText: {
+    color: Colors.textMuted,
+    fontSize: Typography.sm,
+    fontWeight: '600',
+  },
+
+  methodTextActive: {
+    color: Colors.primary,
+  },
+
+  cashSection: {
+    gap: Spacing.md,
+  },
+
+  changeBox: {
+    backgroundColor: Colors.surface,
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: Colors.surfaceBorder,
+  },
+
+  changeLabel: {
+    color: Colors.text,
+    fontWeight: '600',
+    marginBottom: Spacing.sm,
+  },
+
+  changeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+
+  changeText: {
+    color: Colors.textSecondary,
+    fontSize: Typography.sm,
+  },
+
+  changeVal: {
+    fontSize: Typography.md,
+    fontWeight: '700',
+  },
+
+  footer: {
+    padding: Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: Colors.surfaceBorder,
+    backgroundColor: Colors.background,
+  },
+
+  cartContainer: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+  },
+
   cartHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: Spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceBorder,
+    // borderBottomWidth: 1,
+    // borderBottomColor: Colors.surfaceBorder,
   },
-  cartHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  cartTitle: { color: Colors.text, fontSize: Typography.lg, fontWeight: '700' },
+
+  cartHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+
+  cartTitle: {
+    padding: Spacing.xs + 1.5,
+    color: Colors.text,
+    fontSize: Typography.lg,
+    fontWeight: '700',
+  },
+
   cartBadge: {
     backgroundColor: Colors.primary,
     borderRadius: 99,
@@ -394,8 +740,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 5,
   },
-  cartBadgeText: { color: Colors.white, fontSize: 11, fontWeight: '800' },
-  cartList: { padding: Spacing.lg },
+
+  cartBadgeText: {
+    color: Colors.white,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  cartList: {
+    padding: Spacing.lg,
+  },
+
   cartItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -404,25 +759,81 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.background,
   },
-  cartItemLeft: { flex: 1, paddingRight: Spacing.md },
-  cartItemName: { color: Colors.text, fontSize: Typography.md, fontWeight: '600' },
-  cartItemDetails: { color: Colors.textSecondary, fontSize: Typography.xs, marginTop: 2 },
-  cartItemNote: { color: Colors.primary, fontSize: 10, fontStyle: 'italic', marginTop: 2 },
-  cartItemTotal: { color: Colors.text, fontSize: Typography.md, fontWeight: '700' },
-  emptyCartContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 100, gap: Spacing.sm },
-  emptyText: { color: Colors.textMuted, fontSize: Typography.md, fontWeight: '600' },
+
+  cartItemLeft: {
+    flex: 1,
+    paddingRight: Spacing.md,
+  },
+
+  cartItemName: {
+    color: Colors.text,
+    fontSize: Typography.md,
+    fontWeight: '600',
+  },
+
+  cartItemDetails: {
+    color: Colors.textSecondary,
+    fontSize: Typography.xs,
+    marginTop: 2,
+  },
+
+  cartItemNote: {
+    color: Colors.primary,
+    fontSize: 10,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+
+  cartItemTotal: {
+    color: Colors.text,
+    fontSize: Typography.md,
+    fontWeight: '700',
+  },
+
+  emptyCartContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 100,
+    gap: Spacing.sm,
+  },
+
+  emptyText: {
+    color: Colors.textMuted,
+    fontSize: Typography.md,
+    fontWeight: '600',
+  },
+
   cartTotalSection: {
-    padding: Spacing.lg,
+    padding: Spacing.sm + 4,
     borderTopWidth: 1,
     borderTopColor: Colors.surfaceBorder,
     backgroundColor: Colors.background,
   },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  totalRowLabel: { color: Colors.textSecondary, fontSize: Typography.sm },
-  totalRowVal: { color: Colors.text, fontSize: Typography.md, fontWeight: '600' },
-  totalDueVal: { color: Colors.success, fontSize: Typography.xl, fontWeight: '800' },
 
-  // Success screen styles
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  totalRowLabel: {
+    color: Colors.textSecondary,
+    fontSize: Typography.sm,
+  },
+
+  totalRowVal: {
+    color: Colors.text,
+    fontSize: Typography.md,
+    fontWeight: '600',
+  },
+
+  totalDueVal: {
+    color: Colors.success,
+    fontSize: Typography.xl,
+    fontWeight: '800',
+  },
+
   successContainer: {
     flex: 1,
     backgroundColor: Colors.surface,
@@ -430,6 +841,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: Spacing.xl,
   },
+
   circle: {
     width: 90,
     height: 90,
@@ -438,12 +850,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.xl,
-    shadowColor: Colors.success,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 8,
   },
+
   successTitle: {
     color: Colors.text,
     fontSize: Typography.xl,
@@ -451,12 +859,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
     textAlign: 'center',
   },
+
   successSubtitle: {
     color: Colors.textSecondary,
     fontSize: Typography.sm,
     textAlign: 'center',
-    marginBottom: Spacing.xxl, 
+    marginBottom: Spacing.xxl,
   },
+
   gridContainer: {
     width: '100%',
     backgroundColor: Colors.background,
@@ -466,36 +876,44 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.surfaceBorder,
   },
+
   gridRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+
   gridItem: {
     flex: 1,
     alignItems: 'flex-start',
   },
+
   gridItemRight: {
     flex: 1,
     alignItems: 'flex-end',
   },
+
   gridLabel: {
     color: Colors.textMuted,
     fontSize: Typography.xs,
     marginBottom: 4,
   },
+
   gridValue: {
     color: Colors.text,
     fontSize: Typography.md,
     fontWeight: '700',
   },
+
   separator: {
     height: 1,
     backgroundColor: Colors.surfaceBorder,
   },
+
   actionGroup: {
     width: '100%',
     gap: Spacing.md,
   },
+
   btn: {
     width: '100%',
   },

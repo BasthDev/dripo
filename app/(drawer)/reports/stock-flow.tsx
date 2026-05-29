@@ -1,7 +1,7 @@
-import React from 'react';
-import { View, StyleSheet, FlatList, Text } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Header, Colors, Spacing, Typography, Radius } from '../../../components/ui';
+import React from 'react';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Colors, Header, Radius, Spacing, Typography } from '../../../components/ui';
 import { usePosStore } from '../../../store/usePosStore';
 
 export default function StockFlowScreen() {

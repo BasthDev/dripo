@@ -1,27 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   Modal,
-  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Header, Colors, Spacing, Radius, Typography } from '../../../components/ui';
-import { usePosStore, BluetoothPrinter } from '../../../store/usePosStore';
+import { Colors, Header, Radius, Spacing, Typography } from '../../../components/ui';
+import { BluetoothPrinter, usePosStore } from '../../../store/usePosStore';
 import {
-  scanBluetoothDevices,
+  BluetoothScanResult,
   connectDevice,
   disconnectDevice,
-  printReceipt,
   isNativePrinterSupported,
-  BluetoothScanResult,
+  printReceipt,
+  scanBluetoothDevices,
 } from '../../../utils/bluetoothPrinter';
 
 export default function PrinterSettingsScreen() {
@@ -158,11 +158,11 @@ export default function PrinterSettingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         
         {/* Device Mode Status Badge */}
-        <View style={styles.badgeContainer}>
+        {/* <View style={styles.badgeContainer}>
           <Text style={[styles.badgeTextMode, { color: isNativePrinterSupported() ? Colors.success : Colors.warning }]}>
             {isNativePrinterSupported() ? '🟢 Bluetooth Mode: Real Hardware' : '⚠️ Bluetooth Mode: Demo / Fallback'}
           </Text>
-        </View>
+        </View> */}
 
         {/* SECTION: Connected Printer */}
         <Text style={styles.sectionTitle}>CURRENT PRINTER</Text>
@@ -199,7 +199,7 @@ export default function PrinterSettingsScreen() {
             <Ionicons name="print-outline" size={42} color={Colors.textMuted} />
             <Text style={styles.noPrinterTitle}>No Printer Connected</Text>
             <Text style={styles.noPrinterDesc}>
-              Pair a portable thermal receipt printer (like RPP02N) below. Receipts will automatically print on checkout.
+              Pair a portable thermal receipt printer (like RPP02N).
             </Text>
           </View>
         )}

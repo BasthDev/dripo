@@ -80,21 +80,35 @@ export async function prepareBluetooth(): Promise<BluetoothReadyResult> {
   }
 
   try {
-    const enabled = await BluetoothManager.isBluetoothEnabled();
+    let enabled = await BluetoothManager.isBluetoothEnabled();
+
     if (!enabled) {
       await BluetoothManager.enableBluetooth();
+
+      // WAIT for adapter startup
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      enabled = await BluetoothManager.isBluetoothEnabled();
     }
+
+    if (!enabled) {
+      return {
+        ready: false,
+        message: 'Bluetooth still disabled.',
+      };
+    }
+
     return { ready: true };
   } catch (e) {
     console.error('[BluetoothPrinter] Prepare Bluetooth error:', e);
+
     return {
       ready: false,
       message:
-        'Could not turn on Bluetooth. Enable it in system settings and grant Nearby devices permission.',
+        'Could not initialize Bluetooth adapter.',
     };
   }
 }
-
 export async function checkBluetoothEnabled(): Promise<boolean> {
   if (!isNativeSupported) return false;
   try {
@@ -140,8 +154,9 @@ export async function scanBluetoothDevices(): Promise<{ found: BluetoothScanResu
   if (!prepared.ready) {
     throw new Error(prepared.message ?? 'Bluetooth not ready');
   }
-
   try {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  
     const resultStr = await BluetoothManager.scanDevices();
     const result = JSON.parse(resultStr);
     
@@ -215,12 +230,13 @@ export async function printReceipt(tx: any, storeSettings: any): Promise<boolean
     // 1. Align center & Print Shop Name
     await BluetoothEscposPrinter.printerAlign(BluetoothEscposPrinter.ALIGN.CENTER);
     await BluetoothEscposPrinter.printText('\n', {});
-    await BluetoothEscposPrinter.printText(`${storeSettings.name || 'Dripo Coffee'}\n`, {
+    await BluetoothEscposPrinter.printText(`${storeSettings.name || 'Dripo'}\n`, 
+      {
       encoding: 'GBK',
       codepage: 0,
-      widthtimes: 1, // Double size
+      widthtimes: 2, // Double size
       heigthtimes: 1,
-      fonttype: 1,
+      fonttype: 2,
     });
     
     // Address & Info
@@ -237,7 +253,7 @@ export async function printReceipt(tx: any, storeSettings: any): Promise<boolean
     // 2. Align left for receipt metadata
     await BluetoothEscposPrinter.printerAlign(BluetoothEscposPrinter.ALIGN.LEFT);
     const dateStr = tx.timestamp ? new Date(tx.timestamp).toLocaleString() : new Date().toLocaleString();
-    await BluetoothEscposPrinter.printText(`ID: #${tx.id.substring(0, 8).toUpperCase()}\n`, {});
+    await BluetoothEscposPrinter.printText(`ID: #${tx.id.substring(0, 6).toUpperCase()}\n`, {});
     await BluetoothEscposPrinter.printText(`Date: ${dateStr}\n`, {});
     await BluetoothEscposPrinter.printText(`Payment: ${tx.paymentMethod}\n`, {});
     if (tx.orderNote) {
@@ -260,9 +276,10 @@ export async function printReceipt(tx: any, storeSettings: any): Promise<boolean
 
     // 4. Print Totals
     const subtotal = tx.totalAmount;
-    await BluetoothEscposPrinter.printText(`${formatLine('TOTAL', `Rp ${subtotal.toLocaleString()}`)}\n`, {
-      fonttype: 1,
-    });
+    await BluetoothEscposPrinter.printText(
+      `${formatLine('TOTAL', `Rp ${subtotal.toLocaleString()}`)}\n`,
+      {}
+    );
 
     if (tx.cashGiven !== undefined && tx.cashGiven > 0) {
       await BluetoothEscposPrinter.printText(`${formatLine('CASH', `Rp ${tx.cashGiven.toLocaleString()}`)}\n`, {});
@@ -276,7 +293,7 @@ export async function printReceipt(tx: any, storeSettings: any): Promise<boolean
     // 5. Print QR Code if available
     if (storeSettings.qrData) {
       await BluetoothEscposPrinter.printerAlign(BluetoothEscposPrinter.ALIGN.CENTER);
-      await BluetoothEscposPrinter.printQRCode(storeSettings.qrData, 200, 3);
+      await BluetoothEscposPrinter.printQRCode(storeSettings.qrData, 250, 3);
       await BluetoothEscposPrinter.printText('\n', {});
     }
 

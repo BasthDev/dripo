@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Header, FlatListCard, EmptyStateCard, SearchBar, Colors, Spacing } from '../../components/ui';
+import React, { useState } from 'react';
+import { FlatList, StyleSheet, View } from 'react-native';
+import { Colors, EmptyStateCard, FlatListCard, Header, SearchBar, Spacing } from '../../components/ui';
 import { usePosStore } from '../../store/usePosStore';
 
 export default function IngredientsScreen() {
@@ -47,6 +47,7 @@ export default function IngredientsScreen() {
             const unitLabel = item.type === 'WEIGHT' ? 'g' : item.type === 'VOLUME' ? 'ml' : 'pcs';
             return (
               <FlatListCard
+                leftIcon="cube-outline"
                 title={item.name}
                 subtitle={`Current Stock: ${item.stock} ${unitLabel}`}
                 badge={item.type}

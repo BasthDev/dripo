@@ -1,19 +1,19 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
   Animated,
-  TouchableOpacity,
-  ScrollView,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
   ViewStyle,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import Button from './Button';
-import { Colors, Spacing, Radius, Typography, Shadow } from './theme';
+import { Colors, Radius, Shadow, Spacing, Typography } from './theme';
 
 interface PopupAction {
   label: string;

@@ -14,7 +14,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#f8ede0",
-        "foregroundImage": "./assets/images/dripo.png"
+        "foregroundImage": "./assets/images/adaptiveIcon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

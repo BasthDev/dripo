@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Header, Colors, Spacing, Radius, Typography } from '../../../components/ui';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Colors, Header, Radius, Spacing, Typography } from '../../../components/ui';
 
 export default function SettingsIndex() {
   const router = useRouter();
@@ -49,8 +49,18 @@ export default function SettingsIndex() {
 
         <Text style={[styles.sectionLabel, { marginTop: Spacing.xl }]}>APP INFO</Text>
         <View style={styles.infoCard}>
-           <Text style={styles.infoText}>Dripo POS v1.0.0</Text>
-           <Text style={styles.infoSubText}>Made with love for coffee owners</Text>
+           <Text style={styles.infoText}>Dripo POS v1.0.0 (Beta)</Text>
+           <Text style={styles.infoSubText}>Made By BasthDev 👻</Text>
+        </View>
+
+        <View style={styles.infoCard}>
+           <Text style={styles.infoText}>Incoming Features & Bugs/Fixes Updates</Text>
+           <Text style={styles.infoSubText}>
+            - Expenses screen and data
+            </Text>
+           <Text style={styles.infoSubText}>
+           - Fixing priter error/bugs 
+           </Text>
         </View>
       </ScrollView>
     </View>

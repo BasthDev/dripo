@@ -1,4 +1,9 @@
-now amke the  serach abr in pos, when i tap the 3 last digit of sku, on cari/enter will auto add item in cart, then also ca u amke my item in cart on tap the flat list, will the opstion popup where i can add note (if not for order, but for the each item)
+#  need fix
+- Priter scanner if error should shown as popup, and also need to shwon this note udner it "Make Sure Bluetooth & Gps/location is active/On"
 
-also there in payment can also add note for the whole order.
-and udpate the trasacation detail scre to thsown the order anditem note!
+- adding footer text seting in the receipt/store information to shown in receipt not hardcoded text
+
+
+(later/skip for now)
+- expenses screen and data, all the new adding hpp item/inverotry will read as expense based the quaintity, so add option in the inventory toggle button where it used for, new item will input in expenses or not, i fnot the just normal add, but if on it will write the data
+type g/m/pcs quantity X buyprice/costperunit = expenses for the item inventory  

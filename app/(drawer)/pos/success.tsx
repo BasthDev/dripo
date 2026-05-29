@@ -49,18 +49,18 @@ export default function SuccessScreen() {
       
       <View style={styles.actionGroup}>
         <Button 
-          label="New Order" 
+          label="Continue" 
           variant="primary" 
-          iconLeft="add-circle-outline"
+          // iconLeft="add-circle-outline"
           onPress={() => router.replace('/pos')}
           style={styles.btn}
         />
-        <Button 
+        {/* <Button 
           label="Back to Dashboard" 
           variant="outline" 
           onPress={() => router.replace('/(drawer)')}
           style={styles.btn}
-        />
+        /> */}
       </View>
     </View>
   );

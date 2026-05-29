@@ -1,7 +1,7 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import uuid from 'react-native-uuid';
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import { ensureCategoryColor, pickCategoryColor } from '../utils/categoryColors';
 
 // ── Types ──
@@ -453,7 +453,7 @@ export const usePosStore = create<PosState>()(
                 type: 'IN',
                 reason: 'VOID_ITEM',
                 quantityDiff: totalQtyRestore,
-                note: `Void ${actualQtyToVoid}x ${item.name} (Tx: ${txId})`
+                note: `Void ${actualQtyToVoid}x ${item.name} (Tx: ${txId.substring(0, 6)}...)`
               });
               newMovements.push(mvt);
             }

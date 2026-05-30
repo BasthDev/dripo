@@ -36,6 +36,12 @@
       "expo-router",
       "./plugins/withBluetoothPermissions.js",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Dripo to access your photos to set a store logo for receipts."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/dripo.png",

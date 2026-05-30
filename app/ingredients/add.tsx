@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Switch, Text } from 'react-native';
+import { View, StyleSheet, ScrollView, Switch, Text, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Header, InputField, Button, Dropdown, DropdownOption, Colors, Spacing, Typography, Radius } from '../../components/ui';
 import { usePosStore, IngredientType } from '../../store/usePosStore';
@@ -18,6 +18,8 @@ export default function AddIngredientScreen() {
   const addIngredient = usePosStore((state) => state.addIngredient);
   const updateIngredient = usePosStore((state) => state.updateIngredient);
   const deleteIngredient = usePosStore((state) => state.deleteIngredient);
+  const isIngredientInUse = usePosStore((state) => state.isIngredientInUse);
+  const recipes = usePosStore((state) => state.recipes);
 
   const [name, setName] = useState('');
   const [type, setType] = useState<IngredientType | ''>('');
@@ -81,8 +83,27 @@ export default function AddIngredientScreen() {
         onBack={() => router.back()}
         actions={id ? [{
           icon: 'trash-outline', color: Colors.error, onPress: () => {
-            deleteIngredient(id);
-            router.back();
+            if (isIngredientInUse(id)) {
+              const count = recipes.filter(r =>
+                r.ingredients.some(ri => ri.ingredientId === id)
+              ).length;
+              Alert.alert(
+                'Cannot Delete',
+                `This ingredient is used in ${count} recipe(s). Remove it from those recipes first.`
+              );
+              return;
+            }
+            Alert.alert('Delete Ingredient', 'Are you sure?', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                  deleteIngredient(id);
+                  router.back();
+                },
+              },
+            ]);
           }
         }] : undefined}
       />

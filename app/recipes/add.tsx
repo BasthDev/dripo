@@ -84,12 +84,9 @@ export default function AddRecipeScreen() {
 
   // Calculations for display - fallback to stock cost if snapshot absent
   const totalCost = recipeIngredients.reduce((sum, ri) => {
-    let cost = ri.snapshotCost;
-    if (cost === undefined || isNaN(cost)) {
-      const liveIng = ingredients.find(i => i.id === ri.ingredientId);
-      cost = liveIng ? liveIng.costPerUnit : 0;
-    }
-    return sum + (cost * ri.quantity);
+    const liveIng = ingredients.find(i => i.id === ri.ingredientId);
+    const unitCost = liveIng ? liveIng.costPerUnit : (ri.snapshotCost || 0);
+    return sum + unitCost * ri.quantity;
   }, 0);
 
   // Dropdown options
@@ -131,11 +128,8 @@ export default function AddRecipeScreen() {
               const dispName = ing ? ing.name : `Deleted Item`;
               const u = ing ? (ing.type === 'WEIGHT' ? 'g' : ing.type === 'VOLUME' ? 'ml' : 'pcs') : 'unit';
               
-              let cost = ri.snapshotCost;
-              if (cost === undefined || isNaN(cost)) {
-                cost = ing ? ing.costPerUnit : 0;
-              }
-              const subtotal = cost * ri.quantity;
+              const unitCost = ing ? ing.costPerUnit : (ri.snapshotCost || 0);
+              const subtotal = unitCost * ri.quantity;
 
               return (
                 <TouchableOpacity
@@ -146,9 +140,9 @@ export default function AddRecipeScreen() {
                 >
                   <View style={styles.itemInfo}>
                     <Text style={styles.itemName}>{dispName}</Text>
-                    <Text style={styles.itemDetails}>{ri.quantity} {u} × Rp {cost}</Text>
-                    {ing && ing.costPerUnit !== cost && (
-                      <Text style={styles.warnText}>Stale pricing (Current: Rp {ing.costPerUnit}). Long press to update.</Text>
+                    <Text style={styles.itemDetails}>{ri.quantity} {u} × Rp {unitCost.toLocaleString()}</Text>
+                    {!ing && (
+                      <Text style={styles.warnText}>Ingredient deleted — update this recipe.</Text>
                     )}
                   </View>
                   <View style={styles.itemRight}>

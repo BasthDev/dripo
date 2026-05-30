@@ -27,7 +27,9 @@ export function getItemUnitCost(
   products: Product[],
   getRecipeCost: (recipeId: string) => number
 ): number {
-  if (item.cost !== undefined && item.cost > 0) return item.cost;
+  if (item.cost != null && !Number.isNaN(item.cost)) {
+    return item.cost;
+  }
   const product = products.find(p => p.id === item.productId);
   if (!product) return 0;
   if (product.useHpp && product.hppId) return getRecipeCost(product.hppId);

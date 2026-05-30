@@ -20,6 +20,9 @@ import {
   Spacing,
   Typography,
 } from '../../../components/ui';
+import PaymentSuccessView, {
+  type PaymentSuccessData,
+} from '../../../components/pos/PaymentSuccessView';
 import { useCartStore } from '../../../store/useCartStore';
 import { usePosStore } from '../../../store/usePosStore';
 import { printReceipt } from '../../../utils/bluetoothPrinter';
@@ -33,7 +36,7 @@ export default function PaymentScreen() {
   const { getTotal, clearCart, items, orderNote, setOrderNote } =
     useCartStore();
 
-  const { addTransaction, getRecipeCost } = usePosStore();
+  const { addTransaction, getRecipeCost, recipes } = usePosStore();
 
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [cashGiven, setCashGiven] = useState('');
@@ -41,12 +44,7 @@ export default function PaymentScreen() {
 
   const [isPaid, setIsPaid] = useState(false);
 
-  const [successData, setSuccessData] = useState<{
-    total: number;
-    change: number;
-    itemsCount: number;
-    method: string;
-  } | null>(null);
+  const [successData, setSuccessData] = useState<PaymentSuccessData | null>(null);
 
   const total = getTotal();
   const cashParsed = parseFloat(cashGiven) || 0;
@@ -66,9 +64,19 @@ export default function PaymentScreen() {
 
     const txItems = items.map(cartItem => {
       let cost = 0;
+      let hppId: string | undefined;
+      let recipeSnapshot: { ingredientId: string; quantity: number }[] | undefined;
 
       if (cartItem.product.useHpp && cartItem.product.hppId) {
-        cost = getRecipeCost(cartItem.product.hppId) || 0;
+        hppId = cartItem.product.hppId;
+        cost = getRecipeCost(hppId) || 0;
+        const recipe = recipes.find(r => r.id === hppId);
+        if (recipe) {
+          recipeSnapshot = recipe.ingredients.map(ri => ({
+            ingredientId: ri.ingredientId,
+            quantity: ri.quantity,
+          }));
+        }
       } else if (!cartItem.product.useHpp) {
         cost = cartItem.product.buyPrice || 0;
       }
@@ -84,8 +92,10 @@ export default function PaymentScreen() {
         categoryName: category?.name,
         quantity: cartItem.quantity,
         sellPrice: cartItem.product.sellPrice,
-        cost: cost,
+        cost,
         note: cartItem.note,
+        hppId,
+        recipeSnapshot,
       };
     });
 
@@ -122,10 +132,14 @@ export default function PaymentScreen() {
     );
 
     setSuccessData({
+      txId,
+      timestamp,
       total,
+      paidAmount: method === 'CASH' ? cashParsed : total,
       change: finalChange,
       itemsCount: finalItemsCount,
       method,
+      orderNote: trimmedOrderNote || undefined,
     });
 
     setIsPaid(true);
@@ -250,91 +264,16 @@ export default function PaymentScreen() {
     );
   };
 
-  const renderSuccessUI = () => {
-    if (!successData) return null;
-
+  if (isPaid && successData) {
     return (
-      <View style={styles.successContainer}>
-        <View style={styles.circle}>
-          <Ionicons
-            name="checkmark"
-            size={50}
-            color={Colors.white}
-          />
-        </View>
-
-        <Text style={styles.successTitle}>
-          Payment Successful
-        </Text>
-
-        <Text style={styles.successSubtitle}>
-          Order has been recorded successfully.
-        </Text>
-
-        <View style={styles.gridContainer}>
-          <View style={styles.gridRow}>
-            <View style={styles.gridItem}>
-              <Text style={styles.gridLabel}>
-                Total Amount
-              </Text>
-
-              <Text style={styles.gridValue}>
-                Rp {successData.total.toLocaleString()}
-              </Text>
-            </View>
-
-            <View style={styles.gridItemRight}>
-              <Text style={styles.gridLabel}>
-                Change
-              </Text>
-
-              <Text style={styles.gridValue}>
-                Rp {successData.change.toLocaleString()}
-              </Text>
-            </View>
-          </View>
-
-          <View
-            style={[
-              styles.separator,
-              { marginVertical: Spacing.md },
-            ]}
-          />
-
-          <View style={styles.gridRow}>
-            <View style={styles.gridItem}>
-              <Text style={styles.gridLabel}>
-                Total Items
-              </Text>
-
-              <Text style={styles.gridValue}>
-                {successData.itemsCount} items
-              </Text>
-            </View>
-
-            <View style={styles.gridItemRight}>
-              <Text style={styles.gridLabel}>
-                Payment Type
-              </Text>
-
-              <Text style={styles.gridValue}>
-                {successData.method}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.actionGroup}>
-          <Button
-            label="Continue"
-            variant="primary"
-            onPress={() => router.replace('/pos')}
-            style={styles.btn}
-          />
-        </View>
+      <View style={styles.container}>
+        <PaymentSuccessView
+          data={successData}
+          onDone={() => router.replace('/pos')}
+        />
       </View>
     );
-  };
+  }
 
   return (
     <View style={styles.container}>
@@ -345,29 +284,18 @@ export default function PaymentScreen() {
         ]}
       >
         {/* LEFT PANEL */}
-        {(!isPaid || showSplit) && (
-          <View
-            style={[
-              styles.paymentPanel,
-
-              showSplit && {
-                flex: 1.2,
-              },
-
-              isPaid &&
-                !showSplit && {
-                  opacity: 0.55,
-                  pointerEvents: 'none',
-                },
-            ]}
-          >
-            {/* HEADER ONLY LEFT PANEL */}
-            {(!isPaid || showSplit) && (
-              <Header
-                title="Payment"
-                onBack={() => router.back()}
-              />
-            )}
+        <View
+          style={[
+            styles.paymentPanel,
+            showSplit && {
+              flex: 1.2,
+            },
+          ]}
+        >
+          <Header
+            title="Payment"
+            onBack={() => router.back()}
+          />
 
             <ScrollView contentContainerStyle={styles.content}>
               <View style={styles.totalBox}>
@@ -530,45 +458,34 @@ export default function PaymentScreen() {
               )}
             </ScrollView>
 
-            {!isPaid && (
-              <View style={styles.footer}>
-                <Button
-                  label={
-                    method === 'CASH'
-                      ? `Confirm Payment (Change: Rp ${change.toLocaleString()})`
-                      : 'Confirm Payment'
-                  }
-                  variant="primary"
-                  fullWidth
-                  disabled={!canPay}
-                  onPress={handleConfirm}
-                />
-              </View>
-            )}
+            <View style={styles.footer}>
+              <Button
+                label={
+                  method === 'CASH'
+                    ? `Confirm Payment (Change: Rp ${change.toLocaleString()})`
+                    : 'Confirm Payment'
+                }
+                variant="primary"
+                fullWidth
+                disabled={!canPay}
+                onPress={handleConfirm}
+              />
+            </View>
           </View>
-        )}
 
         {/* RIGHT PANEL */}
-        {(isPaid || showSplit) && (
+        {showSplit && (
           <View
             style={[
               styles.rightPanel,
-
-              showSplit && {
+              {
                 flex: 1,
                 borderLeftWidth: 1,
-                borderLeftColor:
-                  Colors.surfaceBorder,
-              },
-
-              !showSplit && {
-                flex: 1,
+                borderLeftColor: Colors.surfaceBorder,
               },
             ]}
           >
-            {isPaid
-              ? renderSuccessUI()
-              : renderCartSummary()}
+            {renderCartSummary()}
           </View>
         )}
       </View>
@@ -832,89 +749,5 @@ const styles = StyleSheet.create({
     color: Colors.success,
     fontSize: Typography.xl,
     fontWeight: '800',
-  },
-
-  successContainer: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.xl,
-  },
-
-  circle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: Colors.success,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xl,
-  },
-
-  successTitle: {
-    color: Colors.text,
-    fontSize: Typography.xl,
-    fontWeight: '800',
-    marginBottom: Spacing.sm,
-    textAlign: 'center',
-  },
-
-  successSubtitle: {
-    color: Colors.textSecondary,
-    fontSize: Typography.sm,
-    textAlign: 'center',
-    marginBottom: Spacing.xxl,
-  },
-
-  gridContainer: {
-    width: '100%',
-    backgroundColor: Colors.background,
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.xxl,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-  },
-
-  gridRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-
-  gridItem: {
-    flex: 1,
-    alignItems: 'flex-start',
-  },
-
-  gridItemRight: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-
-  gridLabel: {
-    color: Colors.textMuted,
-    fontSize: Typography.xs,
-    marginBottom: 4,
-  },
-
-  gridValue: {
-    color: Colors.text,
-    fontSize: Typography.md,
-    fontWeight: '700',
-  },
-
-  separator: {
-    height: 1,
-    backgroundColor: Colors.surfaceBorder,
-  },
-
-  actionGroup: {
-    width: '100%',
-    gap: Spacing.md,
-  },
-
-  btn: {
-    width: '100%',
   },
 });

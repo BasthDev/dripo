@@ -1,5 +1,7 @@
 import { PermissionsAndroid, Platform, type Permission } from 'react-native';
 
+import { readLogoBase64 } from './storeLogo';
+
 export type BluetoothReadyResult = {
   ready: boolean;
   message?: string;
@@ -227,9 +229,24 @@ export async function printReceipt(tx: any, storeSettings: any): Promise<boolean
   }
 
   try {
-    // 1. Align center & Print Shop Name
     await BluetoothEscposPrinter.printerAlign(BluetoothEscposPrinter.ALIGN.CENTER);
     await BluetoothEscposPrinter.printText('\n', {});
+
+    const logoBase64 = await readLogoBase64(storeSettings.logoUri);
+    if (logoBase64) {
+      try {
+        await BluetoothEscposPrinter.printPic(logoBase64, {
+          width: 200,
+          center: true,
+          paperSize: 58,
+          autoCut: false,
+        });
+        await BluetoothEscposPrinter.printText('\n', {});
+      } catch (logoErr) {
+        console.warn('[BluetoothPrinter] Logo print skipped:', logoErr);
+      }
+    }
+
     await BluetoothEscposPrinter.printText(`${storeSettings.name || 'Dripo'}\n`, 
       {
       encoding: 'GBK',
@@ -297,10 +314,15 @@ export async function printReceipt(tx: any, storeSettings: any): Promise<boolean
       await BluetoothEscposPrinter.printText('\n', {});
     }
 
-    // 6. Thank you message
+    // 6. Receipt footer (from store settings)
     await BluetoothEscposPrinter.printerAlign(BluetoothEscposPrinter.ALIGN.CENTER);
-    await BluetoothEscposPrinter.printText('THANK YOU FOR YOUR VISIT!\n', {});
-    await BluetoothEscposPrinter.printText('Dripo POS System\n', {});
+    const footer = (storeSettings.receiptFooter || 'Thank you for your visit!').trim();
+    if (footer) {
+      const lines = footer.split('\n').filter(Boolean);
+      for (const line of lines) {
+        await BluetoothEscposPrinter.printText(`${line}\n`, {});
+      }
+    }
     await BluetoothEscposPrinter.printText('\n\n\n', {});
     
     return true;

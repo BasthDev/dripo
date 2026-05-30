@@ -274,6 +274,27 @@ function CustomDrawerContent(props: any) {
         />
 
         <DrawerItem
+          label="Transactions"
+          icon={({ color, size }) => (
+            <Ionicons
+              name="receipt-outline"
+              size={size}
+              color={color}
+            />
+          )}
+          onPress={() =>
+            go(
+              '/transactions',
+              isRouteActive(pathname, '/transactions')
+            )
+          }
+          focused={isRouteActive(pathname, '/transactions')}
+          activeTintColor={Colors.primary}
+          inactiveTintColor={Colors.text}
+          labelStyle={styles.drawerLabel}
+        />
+
+        <DrawerItem
           label="Reports & Sales"
           icon={({ color, size }) => (
             <Ionicons
@@ -367,6 +388,7 @@ export default function DrawerLayout() {
       <Drawer.Screen name="recipes" />
       <Drawer.Screen name="ingredients" />
       <Drawer.Screen name="categories" />
+      <Drawer.Screen name="transactions" />
       <Drawer.Screen name="reports" />
       <Drawer.Screen name="settings" />
     </Drawer>

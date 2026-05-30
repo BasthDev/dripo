@@ -51,6 +51,9 @@ export interface StoreSettings {
   phone: string;
   social: string;
   qrData: string;
+  receiptFooter: string;
+  /** Local file URI for receipt logo (document directory) */
+  logoUri?: string;
 }
 
 export interface BluetoothPrinter {
@@ -69,9 +72,12 @@ export interface TransactionItem {
   categoryName?: string; // snapshotted
   quantity: number;
   sellPrice: number; // per item
-  cost: number; // per item, for profit tracking
+  cost: number; // per item COGS frozen at sale
   status?: TransactionStatus; // item level status
   note?: string; // per-line note (e.g. less ice, extra shot)
+  hppId?: string; // recipe id at sale time
+  /** Ingredient qty per unit frozen at sale — used for void/restock accuracy */
+  recipeSnapshot?: { ingredientId: string; quantity: number }[];
 }
 
 export interface Transaction {
@@ -106,6 +112,26 @@ export interface CartItemForCheck {
   quantity: number;
 }
 
+type RecipeStockLine = { ingredientId: string; quantity: number };
+
+function getItemStockLines(
+  item: Pick<TransactionItem, 'recipeSnapshot' | 'hppId'>,
+  product: Product | undefined,
+  recipes: Recipe[]
+): RecipeStockLine[] {
+  if (item.recipeSnapshot?.length) {
+    return item.recipeSnapshot;
+  }
+  const recipeId = item.hppId ?? product?.hppId;
+  if (!recipeId) return [];
+  const recipe = recipes.find(r => r.id === recipeId);
+  if (!recipe) return [];
+  return recipe.ingredients.map(ri => ({
+    ingredientId: ri.ingredientId,
+    quantity: ri.quantity,
+  }));
+}
+
 // ── Store State ──
 interface PosState {
   ingredients: Ingredient[];
@@ -119,7 +145,8 @@ interface PosState {
   // Actions
   addIngredient: (ingredient: Omit<Ingredient, 'id'>) => void;
   updateIngredient: (id: string, ingredient: Partial<Ingredient>) => void;
-  deleteIngredient: (id: string) => void;
+  deleteIngredient: (id: string) => boolean;
+  isIngredientInUse: (id: string) => boolean;
 
   addRecipe: (recipe: Omit<Recipe, 'id'>) => void;
   updateRecipe: (id: string, recipe: Partial<Recipe>) => void;
@@ -196,7 +223,8 @@ export const usePosStore = create<PosState>()(
         address: '123 Brew Avenue, Caffeine City',
         phone: '+1 234 567 890',
         social: '@dripo_coffee',
-        qrData: 'https://dripo.pos'
+        qrData: 'https://dripo.pos',
+        receiptFooter: 'Thank you for your visit!',
       },
       connectedPrinter: null,
 
@@ -218,6 +246,7 @@ export const usePosStore = create<PosState>()(
       }),
       updateIngredient: (id, updated) => set((state) => {
         let movements = [...state.movements];
+        let recipes = state.recipes;
         const old = state.ingredients.find(i => i.id === id);
         
         if (old && updated.stock !== undefined && old.stock !== updated.stock) {
@@ -232,14 +261,38 @@ export const usePosStore = create<PosState>()(
           movements.push(movement);
         }
 
+        if (
+          old &&
+          updated.costPerUnit !== undefined &&
+          old.costPerUnit !== updated.costPerUnit
+        ) {
+          recipes = state.recipes.map(r => ({
+            ...r,
+            ingredients: r.ingredients.map(ri =>
+              ri.ingredientId === id
+                ? { ...ri, snapshotCost: updated.costPerUnit as number }
+                : ri
+            ),
+          }));
+        }
+
         return {
           ingredients: state.ingredients.map(i => i.id === id ? { ...i, ...updated } : i),
-          movements
+          movements,
+          recipes,
         };
       }),
-      deleteIngredient: (id) => set((state) => ({
-        ingredients: state.ingredients.filter(i => i.id !== id),
-      })),
+      isIngredientInUse: (id) => {
+        const { recipes } = get();
+        return recipes.some(r => r.ingredients.some(ri => ri.ingredientId === id));
+      },
+      deleteIngredient: (id) => {
+        if (get().isIngredientInUse(id)) return false;
+        set((state) => ({
+          ingredients: state.ingredients.filter(i => i.id !== id),
+        }));
+        return true;
+      },
 
       // Recipes
       addRecipe: (recipe) => set((state) => ({
@@ -257,13 +310,9 @@ export const usePosStore = create<PosState>()(
         if (!recipe) return 0;
         
         return recipe.ingredients.reduce((total, ri) => {
-          let cost = ri.snapshotCost;
-          if (cost === undefined || isNaN(cost)) {
-            const ing = ingredients.find(i => i.id === ri.ingredientId);
-            cost = ing ? ing.costPerUnit : 0;
-          }
-          const quantity = ri.quantity || 0;
-          const lineCost = (cost || 0) * (quantity || 0);
+          const ing = ingredients.find(i => i.id === ri.ingredientId);
+          const unitCost = ing ? ing.costPerUnit : (ri.snapshotCost || 0);
+          const lineCost = unitCost * (ri.quantity || 0);
           return total + (isNaN(lineCost) ? 0 : lineCost);
         }, 0);
       },
@@ -328,34 +377,30 @@ export const usePosStore = create<PosState>()(
         let updatedIngredients = [...state.ingredients];
         let newMovements = [...state.movements];
 
-        // Process inventory out-flows
+        // Process inventory out-flows (use sale-time recipe snapshot when available)
         for (const item of tx.items) {
           const product = state.products.find(p => p.id === item.productId);
-          if (product && product.useHpp && product.hppId) {
-            const recipe = state.recipes.find(r => r.id === product.hppId);
-            if (recipe) {
-              for (const ri of recipe.ingredients) {
-                const totalQtyUsed = ri.quantity * item.quantity;
-                
-                // Deduct stock
-                updatedIngredients = updatedIngredients.map(ing => {
-                  if (ing.id === ri.ingredientId) {
-                    return { ...ing, stock: ing.stock - totalQtyUsed };
-                  }
-                  return ing;
-                });
+          const stockLines = getItemStockLines(item, product, state.recipes);
+          if (stockLines.length === 0) continue;
 
-                // Generate movement record
-                const mvt = addStockMovement(state, {
-                  ingredientId: ri.ingredientId,
-                  type: 'OUT',
-                  reason: 'SALE',
-                  quantityDiff: -totalQtyUsed,
-                  note: `Tx: ${id}`
-                });
-                newMovements.push(mvt);
+          for (const ri of stockLines) {
+            const totalQtyUsed = ri.quantity * item.quantity;
+
+            updatedIngredients = updatedIngredients.map(ing => {
+              if (ing.id === ri.ingredientId) {
+                return { ...ing, stock: ing.stock - totalQtyUsed };
               }
-            }
+              return ing;
+            });
+
+            const mvt = addStockMovement(state, {
+              ingredientId: ri.ingredientId,
+              type: 'OUT',
+              reason: 'SALE',
+              quantityDiff: -totalQtyUsed,
+              note: `Tx: ${id}`
+            });
+            newMovements.push(mvt);
           }
         }
 
@@ -373,34 +418,29 @@ export const usePosStore = create<PosState>()(
         let updatedIngredients = [...state.ingredients];
         let newMovements = [...state.movements];
 
-        // Restore stock for all non-canceled items
         for (const item of tx.items) {
           if (item.status === 'CANCELED') continue;
 
           const product = state.products.find(p => p.id === item.productId);
-          if (product && product.useHpp && product.hppId) {
-            const recipe = state.recipes.find(r => r.id === product.hppId);
-            if (recipe) {
-              for (const ri of recipe.ingredients) {
-                const totalQtyRestore = ri.quantity * item.quantity;
-                
-                updatedIngredients = updatedIngredients.map(ing => {
-                  if (ing.id === ri.ingredientId) {
-                    return { ...ing, stock: ing.stock + totalQtyRestore };
-                  }
-                  return ing;
-                });
+          const stockLines = getItemStockLines(item, product, state.recipes);
+          for (const ri of stockLines) {
+            const totalQtyRestore = ri.quantity * item.quantity;
 
-                const mvt = addStockMovement(state, {
-                  ingredientId: ri.ingredientId,
-                  type: 'IN',
-                  reason: 'VOID_ORDER',
-                  quantityDiff: totalQtyRestore,
-                  note: `Void Order: ${id}`
-                });
-                newMovements.push(mvt);
+            updatedIngredients = updatedIngredients.map(ing => {
+              if (ing.id === ri.ingredientId) {
+                return { ...ing, stock: ing.stock + totalQtyRestore };
               }
-            }
+              return ing;
+            });
+
+            const mvt = addStockMovement(state, {
+              ingredientId: ri.ingredientId,
+              type: 'IN',
+              reason: 'VOID_ORDER',
+              quantityDiff: totalQtyRestore,
+              note: `Void Order: ${id}`
+            });
+            newMovements.push(mvt);
           }
         }
 
@@ -427,52 +467,42 @@ export const usePosStore = create<PosState>()(
         if (itemIndex === -1) return state;
 
         const item = tx.items[itemIndex];
-        // Clamp qtyToVoid between 1 and item.quantity
         const actualQtyToVoid = Math.min(Math.max(1, qtyToVoid ?? item.quantity), item.quantity);
 
         let updatedIngredients = [...state.ingredients];
         let newMovements = [...state.movements];
 
-        // Restore stock for the voided portion
         const product = state.products.find(p => p.id === item.productId);
-        if (product && product.useHpp && product.hppId) {
-          const recipe = state.recipes.find(r => r.id === product.hppId);
-          if (recipe) {
-            for (const ri of recipe.ingredients) {
-              const totalQtyRestore = ri.quantity * actualQtyToVoid;
-              
-              updatedIngredients = updatedIngredients.map(ing => {
-                if (ing.id === ri.ingredientId) {
-                  return { ...ing, stock: ing.stock + totalQtyRestore };
-                }
-                return ing;
-              });
+        const stockLines = getItemStockLines(item, product, state.recipes);
+        for (const ri of stockLines) {
+          const totalQtyRestore = ri.quantity * actualQtyToVoid;
 
-              const mvt = addStockMovement(state, {
-                ingredientId: ri.ingredientId,
-                type: 'IN',
-                reason: 'VOID_ITEM',
-                quantityDiff: totalQtyRestore,
-                note: `Void ${actualQtyToVoid}x ${item.name} (Tx: ${txId.substring(0, 6)}...)`
-              });
-              newMovements.push(mvt);
+          updatedIngredients = updatedIngredients.map(ing => {
+            if (ing.id === ri.ingredientId) {
+              return { ...ing, stock: ing.stock + totalQtyRestore };
             }
-          }
+            return ing;
+          });
+
+          const mvt = addStockMovement(state, {
+            ingredientId: ri.ingredientId,
+            type: 'IN',
+            reason: 'VOID_ITEM',
+            quantityDiff: totalQtyRestore,
+            note: `Void ${actualQtyToVoid}x ${item.name} (Tx: ${txId.substring(0, 6)}...)`
+          });
+          newMovements.push(mvt);
         }
 
-        // Determine new item state
         const remainingQty = item.quantity - actualQtyToVoid;
         const newItems = tx.items.map((it, idx) => {
           if (idx !== itemIndex) return it;
           if (remainingQty <= 0) {
-            // Full void → mark canceled
             return { ...it, quantity: item.quantity, status: 'CANCELED' as TransactionStatus };
           }
-          // Partial void → reduce quantity, keep COMPLETED
           return { ...it, quantity: remainingQty };
         });
 
-        // Recalculate total from active items only
         const newTotal = newItems.reduce((sum, it) => 
           sum + (it.status !== 'CANCELED' ? it.sellPrice * it.quantity : 0), 0
         );
@@ -554,14 +584,22 @@ export const usePosStore = create<PosState>()(
     {
       name: 'pos-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
-      migrate: (persisted: unknown) => {
-        const state = persisted as { categories?: { id: string; name: string; color?: string }[] };
-        if (state?.categories) {
+      version: 3,
+      migrate: (persisted: unknown, version: number) => {
+        const state = persisted as {
+          categories?: { id: string; name: string; color?: string }[];
+          storeSettings?: Partial<StoreSettings>;
+        };
+        if (version < 2 && state?.categories) {
           state.categories = state.categories.map((c, i) => ({
             ...c,
             color: ensureCategoryColor(c.color, i),
           }));
+        }
+        if (state?.storeSettings) {
+          if (!state.storeSettings.receiptFooter) {
+            state.storeSettings.receiptFooter = 'Thank you for your visit!';
+          }
         }
         return state as never;
       },

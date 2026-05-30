@@ -1,7 +1,5 @@
-const {
-  withAndroidManifest,
-  AndroidConfig,
-} = require('expo/config-plugins');
+const { withAndroidManifest, AndroidConfig } = require('expo/config-plugins');
+const { ensureToolsAvailable } = require('@expo/config-plugins/build/android/Manifest');
 
 const RUNTIME_PERMISSIONS = [
   'android.permission.BLUETOOTH_CONNECT',
@@ -16,31 +14,30 @@ const LEGACY_PERMISSIONS = [
 ];
 
 function withBluetoothPermissions(config) {
-  return withAndroidManifest(config, (config) => {
-    const manifest = config.modResults;
+  return withAndroidManifest(config, (cfg) => {
+    let manifest = ensureToolsAvailable(cfg.modResults);
 
-    // Ensure permissions array exists
-    if (!manifest.manifest['uses-permission']) {
+    AndroidConfig.Permissions.ensurePermissions(manifest, RUNTIME_PERMISSIONS);
+
+    if (!Array.isArray(manifest.manifest['uses-permission'])) {
       manifest.manifest['uses-permission'] = [];
     }
 
-    // Add Android 12+ permissions
-    RUNTIME_PERMISSIONS.forEach((permission) => {
-      AndroidConfig.Permissions.addPermission(
-        manifest,
-        permission
-      );
-    });
+    for (const permission of LEGACY_PERMISSIONS) {
+      const perms = manifest.manifest['uses-permission'];
+      const exists = perms.some((p) => p.$['android:name'] === permission);
+      if (!exists) {
+        perms.push({
+          $: {
+            'android:name': permission,
+            'android:maxSdkVersion': '30',
+          },
+        });
+      }
+    }
 
-    // Add legacy permissions with maxSdkVersion 30
-    LEGACY_PERMISSIONS.forEach((permission) => {
-      AndroidConfig.Permissions.addPermission(manifest, {
-        name: permission,
-        maxSdkVersion: 30,
-      });
-    });
-
-    return config;
+    cfg.modResults = manifest;
+    return cfg;
   });
 }
 

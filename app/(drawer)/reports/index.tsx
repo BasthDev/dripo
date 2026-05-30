@@ -33,13 +33,6 @@ const analyticsItems: MenuItem[] = [
 
 const activityItems: MenuItem[] = [
   {
-    title: 'Monthly Transactions',
-    desc: 'View sales history and grouped by month',
-    icon: 'receipt-outline',
-    color: Colors.primary,
-    path: '/reports/transactions',
-  },
-  {
     title: 'Inventory Activity',
     desc: 'Track every stock in and out movement',
     icon: 'swap-vertical-outline',

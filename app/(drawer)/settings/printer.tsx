@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
   Modal,
@@ -13,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Colors, Header, Radius, Spacing, Typography } from '../../../components/ui';
+import { Colors, Header, Popup, Radius, Spacing, Typography } from '../../../components/ui';
 import { BluetoothPrinter, usePosStore } from '../../../store/usePosStore';
 import {
   BluetoothScanResult,
@@ -24,6 +23,8 @@ import {
   scanBluetoothDevices,
 } from '../../../utils/bluetoothPrinter';
 
+const BT_SCAN_HINT = 'Make sure Bluetooth & GPS/Location is active/On';
+
 export default function PrinterSettingsScreen() {
   const router = useRouter();
   const { connectedPrinter, setConnectedPrinter, storeSettings } = usePosStore();
@@ -32,6 +33,11 @@ export default function PrinterSettingsScreen() {
   const [discoveredDevices, setDiscoveredDevices] = useState<BluetoothScanResult[]>([]);
   const [connectingAddress, setConnectingAddress] = useState<string | null>(null);
   const [printModalVisible, setPrintModalVisible] = useState(false);
+  const [errorPopup, setErrorPopup] = useState<{ title: string; message: string } | null>(null);
+
+  const showPrinterError = (title: string, message: string) => {
+    setErrorPopup({ title, message });
+  };
 
   // Animations
   const scanRadarAnim = useRef(new Animated.Value(0)).current;
@@ -66,14 +72,14 @@ export default function PrinterSettingsScreen() {
       const result = await scanBluetoothDevices();
       setDiscoveredDevices([...result.paired, ...result.found]);
       if (isNativePrinterSupported() && result.found.length === 0 && result.paired.length === 0) {
-        Alert.alert(
+        showPrinterError(
           'No Devices Found',
           'Make sure the printer is on and paired in Android Bluetooth settings, then scan again.'
         );
       }
     } catch (err: any) {
       console.error('Scan error:', err);
-      Alert.alert('Scan Failed', err.message || 'Error occurred while scanning for devices.');
+      showPrinterError('Scan Failed', err.message || 'Error occurred while scanning for devices.');
     } finally {
       setIsScanning(false);
     }
@@ -91,11 +97,14 @@ export default function PrinterSettingsScreen() {
         };
         setConnectedPrinter(printer);
       } else {
-        Alert.alert('Connection Failed', `Could not connect to ${device.name}. Check if printer is powered on.`);
+        showPrinterError(
+          'Connection Failed',
+          `Could not connect to ${device.name}. Check if printer is powered on.`
+        );
       }
     } catch (err: any) {
       console.error('Connect error:', err);
-      Alert.alert('Connection Error', err.message || 'An error occurred.');
+      showPrinterError('Connection Error', err.message || 'An error occurred.');
     } finally {
       setConnectingAddress(null);
     }
@@ -215,6 +224,8 @@ export default function PrinterSettingsScreen() {
           )}
         </View>
 
+        <Text style={styles.scanHint}>{BT_SCAN_HINT}</Text>
+
         {isScanning ? (
           <View style={styles.scanningContainer}>
             <View style={styles.radarWrapper}>
@@ -297,6 +308,22 @@ export default function PrinterSettingsScreen() {
         )}
 
       </ScrollView>
+
+      <Popup
+        visible={!!errorPopup}
+        onClose={() => setErrorPopup(null)}
+        icon="bluetooth-outline"
+        iconColor={Colors.error}
+        title={errorPopup?.title}
+        description={errorPopup?.message}
+        actions={[
+          { label: 'OK', variant: 'primary', onPress: () => setErrorPopup(null) },
+        ]}
+      >
+        {errorPopup ? (
+          <Text style={styles.popupHint}>{BT_SCAN_HINT}</Text>
+        ) : null}
+      </Popup>
 
       {/* MODAL: Virtual Thermal Receipt Printer Simulator */}
       <Modal
@@ -381,8 +408,9 @@ export default function PrinterSettingsScreen() {
                   <Text style={styles.rQrLabel}>Scan to review store</Text>
                 </View>
                 
-                <Text style={styles.rFooter}>THANK YOU FOR YOUR VISIT!</Text>
-                <Text style={styles.rFooterSub}>Dripo POS System</Text>
+                <Text style={styles.rFooter}>
+                  {storeSettings.receiptFooter || 'Thank you for your visit!'}
+                </Text>
                 
                 {/* Paper tear lines representation */}
                 <View style={styles.zigZagRow}>
@@ -497,6 +525,20 @@ const styles = StyleSheet.create({
   scanSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.md },
   scanRefreshBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.primary + '15', paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.sm },
   scanRefreshText: { color: Colors.primary, fontSize: Typography.xs, fontWeight: '700' },
+  scanHint: {
+    color: Colors.textMuted,
+    fontSize: Typography.xs,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginBottom: Spacing.xs,
+  },
+  popupHint: {
+    color: Colors.warning,
+    fontSize: Typography.sm,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+  },
 
   // Bluetooth scanning UI
   scanningContainer: {

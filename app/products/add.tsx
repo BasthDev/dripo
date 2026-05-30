@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, Switch } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, Switch, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Header, InputField, Button, Dropdown, DropdownOption, Colors, Spacing, Typography, Radius } from '../../components/ui';
 import { usePosStore } from '../../store/usePosStore';
@@ -8,7 +8,7 @@ export default function AddProductScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   
-  const { recipes, products, getRecipeCost, addProduct, updateProduct, deleteProduct, addCategory, categories } = usePosStore();
+  const { recipes, products, getRecipeCost, addProduct, updateProduct, deleteProduct, addCategory, categories, modifiers } = usePosStore();
 
   const [sku, setSku] = useState('');
   const [name, setName] = useState('');
@@ -17,6 +17,7 @@ export default function AddProductScreen() {
   const [hppId, setHppId] = useState('');
   const [buyPrice, setBuyPrice] = useState('');
   const [sellPrice, setSellPrice] = useState('');
+  const [modifierIds, setModifierIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -29,6 +30,7 @@ export default function AddProductScreen() {
         setHppId(existing.hppId || '');
         setBuyPrice(existing.buyPrice ? existing.buyPrice.toString() : '');
         setSellPrice(existing.sellPrice.toString());
+        setModifierIds(existing.modifierIds ?? []);
       }
     }
   }, [id, products]);
@@ -67,6 +69,7 @@ export default function AddProductScreen() {
       hppId: useHpp ? hppId : undefined,
       buyPrice: useHpp ? undefined : buyParsed,
       sellPrice: sellParsed,
+      modifierIds: modifierIds.length ? modifierIds : undefined,
     };
 
     if (id) {
@@ -185,6 +188,42 @@ export default function AddProductScreen() {
           iconLeft="pricetag-outline"
         />
 
+        {modifiers.length > 0 ? (
+          <View style={styles.modSection}>
+            <View style={styles.modHeader}>
+              <Text style={styles.modTitle}>Available modifiers</Text>
+              <TouchableOpacity onPress={() => router.push('/modifiers')}>
+                <Text style={styles.modLink}>Manage</Text>
+              </TouchableOpacity>
+            </View>
+            {modifiers.map(mod => {
+              const on = modifierIds.includes(mod.id);
+              return (
+                <TouchableOpacity
+                  key={mod.id}
+                  style={[styles.modRow, on && styles.modRowOn]}
+                  onPress={() =>
+                    setModifierIds(prev =>
+                      on ? prev.filter(x => x !== mod.id) : [...prev, mod.id]
+                    )
+                  }
+                >
+                  <Text style={styles.modName}>{mod.name}</Text>
+                  <Text style={styles.modPrice}>
+                    {mod.sellPriceDelta !== 0
+                      ? `+Rp ${mod.sellPriceDelta.toLocaleString()}`
+                      : '—'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <TouchableOpacity onPress={() => router.push('/modifiers/add')}>
+            <Text style={styles.modLink}>+ Create modifiers (extra shot, etc.)</Text>
+          </TouchableOpacity>
+        )}
+
         {(activeCost > 0 || sellVal > 0) && (
           <View style={styles.marginBox}>
             <Text style={styles.marginTitle}>Profit Margin Preview</Text>
@@ -232,4 +271,20 @@ const styles = StyleSheet.create({
   marginValSell: { color: Colors.success, fontSize: Typography.sm, fontWeight: '600' },
   marginValProfit: { fontSize: Typography.md, fontWeight: '700' },
   saveBtn: { marginTop: Spacing.md },
+  modSection: { gap: Spacing.xs },
+  modHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  modTitle: { color: Colors.text, fontWeight: '600', fontSize: Typography.md },
+  modLink: { color: Colors.primary, fontWeight: '600', fontSize: Typography.sm },
+  modRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    backgroundColor: Colors.surface,
+  },
+  modRowOn: { borderColor: Colors.primary, backgroundColor: Colors.primary + '10' },
+  modName: { color: Colors.text, fontWeight: '500' },
+  modPrice: { color: Colors.primary, fontWeight: '600', fontSize: Typography.sm },
 });

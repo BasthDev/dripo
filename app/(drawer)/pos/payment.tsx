@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   FlatList,
   ScrollView,
@@ -11,6 +11,9 @@ import {
   View,
 } from 'react-native';
 import uuid from 'react-native-uuid';
+import PaymentSuccessView, {
+  type PaymentSuccessData,
+} from '../../../components/pos/PaymentSuccessView';
 import {
   Button,
   Colors,
@@ -20,12 +23,16 @@ import {
   Spacing,
   Typography,
 } from '../../../components/ui';
-import PaymentSuccessView, {
-  type PaymentSuccessData,
-} from '../../../components/pos/PaymentSuccessView';
-import { useCartStore } from '../../../store/useCartStore';
+import { getCartLineUnitPrice, useCartStore } from '../../../store/useCartStore';
 import { usePosStore } from '../../../store/usePosStore';
 import { printReceipt } from '../../../utils/bluetoothPrinter';
+import {
+  computeModifierAwareCost,
+  getAppliedModifierLabels,
+  getModifierPriceDelta,
+  mergeRecipeLines,
+  recipeIngredientsToLines,
+} from '../../../utils/modifierUtils';
 
 type PaymentMethod = 'CASH' | 'QRIS' | 'CARD';
 
@@ -33,10 +40,14 @@ export default function PaymentScreen() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
 
-  const { getTotal, clearCart, items, orderNote, setOrderNote } =
+  const { getTotal, clearCart, items, orderNote, setOrderNote, refreshFromStore } =
     useCartStore();
 
-  const { addTransaction, getRecipeCost, recipes } = usePosStore();
+  useEffect(() => {
+    refreshFromStore();
+  }, [refreshFromStore]);
+
+  const { addTransaction, getRecipeCost, recipes, modifiers } = usePosStore();
 
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [cashGiven, setCashGiven] = useState('');
@@ -62,20 +73,28 @@ export default function PaymentScreen() {
     const txId = uuid.v4() as string;
     const timestamp = new Date().toISOString();
 
+    const { modifiers, ingredients } = usePosStore.getState();
+
     const txItems = items.map(cartItem => {
       let cost = 0;
       let hppId: string | undefined;
       let recipeSnapshot: { ingredientId: string; quantity: number }[] | undefined;
+      const modifierIds = cartItem.modifierIds ?? [];
+      const unitSell =
+        cartItem.product.sellPrice +
+        getModifierPriceDelta(modifierIds, modifiers);
 
       if (cartItem.product.useHpp && cartItem.product.hppId) {
         hppId = cartItem.product.hppId;
-        cost = getRecipeCost(hppId) || 0;
+        const baseCost = getRecipeCost(hppId) || 0;
+        cost = computeModifierAwareCost(baseCost, modifierIds, modifiers, ingredients);
         const recipe = recipes.find(r => r.id === hppId);
         if (recipe) {
-          recipeSnapshot = recipe.ingredients.map(ri => ({
-            ingredientId: ri.ingredientId,
-            quantity: ri.quantity,
-          }));
+          recipeSnapshot = mergeRecipeLines(
+            recipeIngredientsToLines(recipe.ingredients),
+            modifierIds,
+            modifiers
+          );
         }
       } else if (!cartItem.product.useHpp) {
         cost = cartItem.product.buyPrice || 0;
@@ -85,17 +104,21 @@ export default function PaymentScreen() {
         .getState()
         .categories.find(c => c.id === cartItem.product.categoryId);
 
+      const appliedModifiers = getAppliedModifierLabels(modifierIds, modifiers);
+
       return {
         productId: cartItem.product.id,
         name: cartItem.product.name,
         sku: cartItem.product.sku,
         categoryName: category?.name,
         quantity: cartItem.quantity,
-        sellPrice: cartItem.product.sellPrice,
+        sellPrice: unitSell,
         cost,
         note: cartItem.note,
         hppId,
         recipeSnapshot,
+        modifierIds: modifierIds.length ? modifierIds : undefined,
+        appliedModifiers: appliedModifiers.length ? appliedModifiers : undefined,
       };
     });
 
@@ -178,7 +201,9 @@ export default function PaymentScreen() {
           data={items}
           keyExtractor={item => item.cartItemId}
           contentContainerStyle={styles.cartList}
-          renderItem={({ item }) => (
+          renderItem={({ item }) => {
+            const unitPrice = getCartLineUnitPrice(item);
+            return (
             <View style={styles.cartItem}>
               <View style={styles.cartItemLeft}>
                 <Text
@@ -190,8 +215,17 @@ export default function PaymentScreen() {
 
                 <Text style={styles.cartItemDetails}>
                   {item.quantity} x Rp{' '}
-                  {item.product.sellPrice.toLocaleString()}
+                  {unitPrice.toLocaleString()}
                 </Text>
+
+                {item.modifierIds?.length ? (
+                  <Text style={styles.cartItemNote} numberOfLines={2}>
+                    {item.modifierIds
+                      .map(id => modifiers.find(m => m.id === id)?.name)
+                      .filter(Boolean)
+                      .join(', ')}
+                  </Text>
+                ) : null}
 
                 {item.note ? (
                   <Text
@@ -205,12 +239,10 @@ export default function PaymentScreen() {
 
               <Text style={styles.cartItemTotal}>
                 Rp{' '}
-                {(
-                  item.product.sellPrice * item.quantity
-                ).toLocaleString()}
+                {(unitPrice * item.quantity).toLocaleString()}
               </Text>
             </View>
-          )}
+          );}}
           ListEmptyComponent={() => (
             <View style={styles.emptyCartContainer}>
               <Ionicons
@@ -723,9 +755,9 @@ const styles = StyleSheet.create({
 
   cartTotalSection: {
     padding: Spacing.sm + 4,
-    borderTopWidth: 1,
-    borderTopColor: Colors.surfaceBorder,
-    backgroundColor: Colors.background,
+    // borderTopWidth: 1,
+    // borderTopColor: Colors.surfaceBorder,
+    backgroundColor: Colors.surface,
   },
 
   totalRow: {

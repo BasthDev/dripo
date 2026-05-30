@@ -16,6 +16,13 @@ export default function SettingsIndex() {
       path: '/settings/store'
     },
     {
+      title: 'Product Modifiers',
+      desc: 'Extra shot, add-ons — price & ingredient changes',
+      icon: 'options-outline',
+      color: Colors.secondary,
+      path: '/modifiers',
+    },
+    {
       title: 'Printer Settings',
       desc: 'Connect and configure thermal printers',
       icon: 'print-outline',
@@ -34,7 +41,13 @@ export default function SettingsIndex() {
           <TouchableOpacity 
             key={index} 
             style={styles.menuCard}
-            onPress={() => item.path.includes('/settings/') && router.push(item.path as any)}
+            onPress={() => {
+              if (item.path.startsWith('/settings/')) {
+                router.push(item.path as never);
+              } else {
+                router.push(item.path as never);
+              }
+            }}
           >
             <View style={[styles.iconBox, { backgroundColor: item.color + '15' }]}>
                <Ionicons name={item.icon as any} size={24} color={item.color} />

@@ -2,20 +2,29 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useCartStore } from '../../store/useCartStore';
+import { getCartLineUnitPrice, useCartStore } from '../../store/useCartStore';
 import { usePosStore } from '../../store/usePosStore';
 import { Button, Colors, Radius, Spacing, Typography } from '../ui';
 import CartItemNotePopup from './CartItemNotePopup';
+import CartModifierPopup from './CartModifierPopup';
 
 export default function CartPanel() {
   const router = useRouter();
-  const { items, updateQuantity, updateItemNote, removeItem, getTotal, getCartItemsForCheck } =
+  const { items, updateQuantity, updateItemNote, updateItemModifiers, removeItem, getTotal, getCartItemsForCheck } =
     useCartStore();
-  const getMaxAddable = usePosStore((state) => state.getMaxAddable);
   const canAddToCart = usePosStore((state) => state.canAddToCart);
+  const modifiers = usePosStore((state) => state.modifiers);
 
   const [noteTargetId, setNoteTargetId] = useState<string | null>(null);
+  const [modifierTargetId, setModifierTargetId] = useState<string | null>(null);
   const noteTarget = items.find((i) => i.cartItemId === noteTargetId);
+  const modifierTarget = items.find((i) => i.cartItemId === modifierTargetId);
+
+  const availableForTarget = modifierTarget
+    ? (modifierTarget.product.modifierIds ?? [])
+        .map(id => modifiers.find(m => m.id === id))
+        .filter((m): m is NonNullable<typeof m> => !!m)
+    : [];
 
   const handleCheckout = () => {
     if (items.length > 0) {
@@ -25,7 +34,7 @@ export default function CartPanel() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      {/* <View style={styles.header}>
         <Ionicons name="cart-outline" size={24} color={Colors.text} />
         <Text style={styles.headerTitle}>Current Order</Text>
         {items.length > 0 && (
@@ -35,7 +44,7 @@ export default function CartPanel() {
             </Text>
           </View>
         )}
-      </View>
+      </View> */}
 
       {items.length === 0 ? (
         <View style={styles.empty}>
@@ -49,7 +58,17 @@ export default function CartPanel() {
           keyExtractor={(item) => item.cartItemId}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => {
-            const canIncrement = canAddToCart(item.product.id, 1, getCartItemsForCheck());
+            const cartCheck = getCartItemsForCheck();
+            const canIncrement = canAddToCart(
+              item.product.id,
+              1,
+              cartCheck,
+              item.modifierIds
+            );
+            const unitPrice = getCartLineUnitPrice(item);
+            const modLabels = (item.modifierIds ?? [])
+              .map(id => modifiers.find(m => m.id === id)?.name)
+              .filter(Boolean);
 
             return (
               <View style={styles.cartItem}>
@@ -62,15 +81,34 @@ export default function CartPanel() {
                     <Text style={styles.itemName} numberOfLines={1}>
                       {item.product.name}
                     </Text>
-                    <Ionicons
-                      name={item.note ? 'document-text' : 'create-outline'}
-                      size={14}
-                      color={item.note ? Colors.primary : Colors.textMuted}
-                    />
+                    <View style={styles.itemActions}>
+                      {(item.product.modifierIds?.length ?? 0) > 0 && (
+                        <TouchableOpacity
+                          onPress={() => setModifierTargetId(item.cartItemId)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons
+                            name={item.modifierIds?.length ? 'options' : 'options-outline'}
+                            size={14}
+                            color={item.modifierIds?.length ? Colors.primary : Colors.textMuted}
+                          />
+                        </TouchableOpacity>
+                      )}
+                      <Ionicons
+                        name={item.note ? 'document-text' : 'create-outline'}
+                        size={14}
+                        color={item.note ? Colors.primary : Colors.textMuted}
+                      />
+                    </View>
                   </View>
                   <Text style={styles.itemPrice}>
-                    Rp {(item.product.sellPrice * item.quantity).toLocaleString()}
+                    Rp {(unitPrice * item.quantity).toLocaleString()}
                   </Text>
+                  {modLabels.length > 0 ? (
+                    <Text style={styles.itemNote} numberOfLines={2}>
+                      {modLabels.join(', ')}
+                    </Text>
+                  ) : null}
                   {item.note ? (
                     <Text style={styles.itemNote} numberOfLines={2}>
                       {item.note}
@@ -107,7 +145,7 @@ export default function CartPanel() {
                   <TouchableOpacity
                     style={[styles.qtyBtn, !canIncrement && styles.qtyBtnDisabled]}
                     onPress={() => {
-                      if (canAddToCart(item.product.id, 1, getCartItemsForCheck())) {
+                      if (canAddToCart(item.product.id, 1, cartCheck, item.modifierIds)) {
                         updateQuantity(item.cartItemId, item.quantity + 1);
                       }
                     }}
@@ -147,6 +185,18 @@ export default function CartPanel() {
         onClose={() => setNoteTargetId(null)}
         onSave={(note) => {
           if (noteTargetId) updateItemNote(noteTargetId, note);
+        }}
+      />
+
+      <CartModifierPopup
+        visible={!!modifierTarget}
+        productName={modifierTarget?.product.name ?? ''}
+        availableModifiers={availableForTarget}
+        selectedIds={modifierTarget?.modifierIds ?? []}
+        onClose={() => setModifierTargetId(null)}
+        onSave={(ids) => {
+          if (modifierTargetId) updateItemModifiers(modifierTargetId, ids);
+          setModifierTargetId(null);
         }}
       />
     </View>
@@ -221,6 +271,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
+  },
+  itemActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
   },
   itemName: {
     color: Colors.text,

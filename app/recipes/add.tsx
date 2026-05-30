@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Header, InputField, Button, Popup, Colors, Spacing, Typography, Radius, DropdownOption, Dropdown } from '../../components/ui';
@@ -18,7 +18,7 @@ export default function AddRecipeScreen() {
   const [selectedIngredientId, setSelectedIngredientId] = useState<string>('');
   const [quantity, setQuantity] = useState('');
 
-  const { ingredients, recipes, addRecipe, updateRecipe } = usePosStore();
+  const { ingredients, recipes, addRecipe, updateRecipe, deleteRecipe, isRecipeInUse } = usePosStore();
 
   useEffect(() => {
     if (id) {
@@ -101,7 +101,34 @@ export default function AddRecipeScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title={id ? "Edit HPP / Recipe" : "Create HPP / Recipe"} onBack={() => router.back()} />
+      <Header
+        title={id ? "Edit HPP / Recipe" : "Create HPP / Recipe"}
+        onBack={() => router.back()}
+        actions={id ? [{
+          icon: 'trash-outline',
+          color: Colors.error,
+          onPress: () => {
+            if (isRecipeInUse(id)) {
+              Alert.alert(
+                'Cannot Delete',
+                'This recipe is linked to one or more products. Unlink them first.'
+              );
+              return;
+            }
+            Alert.alert('Delete Recipe', 'Are you sure?', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                  deleteRecipe(id);
+                  router.back();
+                },
+              },
+            ]);
+          },
+        }] : undefined}
+      />
       
       <ScrollView contentContainerStyle={styles.content}>
         <InputField

@@ -16,6 +16,7 @@ export default function IngredientsScreen() {
       <Header
         title="Bahan Baku (Stock)"
         actions={[
+          { icon: 'download-outline', onPress: () => router.push('/ingredients/receive') },
           { icon: 'add', onPress: () => router.push('/ingredients/add') },
         ]}
       />
@@ -54,6 +55,7 @@ export default function IngredientsScreen() {
                 badgeColor={item.type === 'WEIGHT' ? Colors.success : item.type === 'VOLUME' ? Colors.info : Colors.warning}
                 trailingValue={`Rp ${item.costPerUnit} / ${unitLabel}`}
                 onLongPress={() => router.push({ pathname: '/ingredients/add', params: { id: item.id } })}
+                onPress={() => router.push({ pathname: '/ingredients/receive', params: { id: item.id } })}
               />
             );
           }}

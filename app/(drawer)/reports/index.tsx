@@ -33,6 +33,13 @@ const analyticsItems: MenuItem[] = [
 
 const activityItems: MenuItem[] = [
   {
+    title: 'Inventory Expenses',
+    desc: 'Purchase costs from stock receiving',
+    icon: 'wallet-outline',
+    color: Colors.error,
+    path: '/reports/expenses',
+  },
+  {
     title: 'Inventory Activity',
     desc: 'Track every stock in and out movement',
     icon: 'swap-vertical-outline',

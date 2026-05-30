@@ -284,6 +284,11 @@ export async function printReceipt(tx: any, storeSettings: any): Promise<boolean
       const leftCol = `${item.quantity}x ${item.name}`;
       const rightCol = `Rp ${(item.quantity * item.sellPrice).toLocaleString()}`;
       await BluetoothEscposPrinter.printText(`${formatLine(leftCol, rightCol)}\n`, {});
+      if (item.appliedModifiers?.length) {
+        for (const mod of item.appliedModifiers) {
+          await BluetoothEscposPrinter.printText(`   + ${mod.name}\n`, {});
+        }
+      }
       if (item.note) {
         await BluetoothEscposPrinter.printText(`   * ${item.note}\n`, {});
       }

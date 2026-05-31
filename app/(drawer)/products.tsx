@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Header, FlatListCard, EmptyStateCard, SearchBar, Colors, Spacing } from '../../components/ui';
+import React, { useState } from 'react';
+import { FlatList, StyleSheet, View } from 'react-native';
+import { Colors, EmptyStateCard, FlatListCard, Header, SearchBar, Spacing } from '../../components/ui';
 import { usePosStore } from '../../store/usePosStore';
 
 export default function ProductsScreen() {
@@ -18,7 +18,7 @@ export default function ProductsScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Menu (Products)"
+        title="Products"
         actions={[
           { icon: 'add', onPress: () => router.push('/products/add') },
         ]}
@@ -62,12 +62,14 @@ export default function ProductsScreen() {
               <FlatListCard
                 title={item.name}
                 subtitle={`SKU: ${item.sku}\nCost: Rp ${cost.toLocaleString()} | Margin: Rp ${margin.toLocaleString()}`}
+                image={item.imageUri ? { uri: item.imageUri } : undefined}
                 badge={item.useHpp ? 'Uses HPP' : 'Manual Cost'}
                 badgeColor={item.useHpp ? Colors.primary : Colors.warning}
                 trailingValue={`Rp ${item.sellPrice.toLocaleString()}`}
                 trailingValueColor={Colors.success}
-                leftIcon="fast-food-outline"
+                leftIcon={item.imageUri ? undefined : 'fast-food-outline'}
                 leftIconColor={Colors.primary}
+                onPress={() => router.push({ pathname: '/products/add', params: { id: item.id } })}
                 onLongPress={() => router.push({ pathname: '/products/add', params: { id: item.id } })}
               />
             );

@@ -3,30 +3,30 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  StyleSheet,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View
 } from 'react-native';
 import {
-  Button,
-  Colors,
-  Header,
-  InputField,
-  Radius,
-  Spacing,
-  Typography,
+    Button,
+    Colors,
+    Header,
+    InputField,
+    Radius,
+    Spacing,
+    Typography,
 } from '../../../components/ui';
+import { useAppPopup } from '../../../hooks/useAppPopup';
 import { usePosStore } from '../../../store/usePosStore';
 import {
-  pickAndSaveStoreLogo,
-  removeStoreLogoFile,
+    pickAndSaveStoreLogo,
+    removeStoreLogoFile,
 } from '../../../utils/storeLogo';
 
 export default function StoreSettingsScreen() {
   const router = useRouter();
+  const { showConfirm, AppPopup } = useAppPopup();
   const { storeSettings, updateStoreSettings } = usePosStore();
 
   const [form, setForm] = useState({
@@ -49,17 +49,16 @@ export default function StoreSettingsScreen() {
   };
 
   const handleRemoveLogo = () => {
-    Alert.alert('Remove Logo', 'Remove the receipt logo?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          await removeStoreLogoFile(logoUri);
-          setLogoUri(undefined);
-        },
+    showConfirm({
+      title: 'Remove logo',
+      description: 'Remove the receipt logo?',
+      confirmLabel: 'Remove',
+      destructive: true,
+      onConfirm: async () => {
+        await removeStoreLogoFile(logoUri);
+        setLogoUri(undefined);
       },
-    ]);
+    });
   };
 
   const handleSave = () => {
@@ -180,6 +179,7 @@ export default function StoreSettingsScreen() {
         />
         <View style={{ height: 40 }} />
       </ScrollView>
+      <AppPopup />
     </View>
   );
 }

@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CartPanel from '../../../components/pos/CartPanel';
 import { Button, Colors, GridCard, Header, Popup, SearchBar, Spacing, Typography } from '../../../components/ui';
-import { useCartStore } from '../../../store/useCartStore';
+import { selectCartTotal, useCartStore } from '../../../store/useCartStore';
 import { usePosStore } from '../../../store/usePosStore';
+import { leaveTableSale, type TableOrderNavFrom } from '../../../utils/tableOrderFlow';
 
 export default function POSScreen() {
   const router = useRouter();
@@ -19,8 +20,42 @@ export default function POSScreen() {
   const canAddToCart = usePosStore(state => state.canAddToCart);
   const getMaxAddable = usePosStore(state => state.getMaxAddable);
 
-  const { items, addItem, getTotal, getCartItemsForCheck } = useCartStore();
+  const { tableId, from } = useLocalSearchParams<{
+    tableId?: string;
+    from?: TableOrderNavFrom;
+  }>();
+  const diningTables = usePosStore(state => state.diningTables);
 
+  const {
+    items,
+    addItem,
+    getCartItemsForCheck,
+    loadTableOrderIntoCart,
+    activeTableId,
+    clearCart,
+  } = useCartStore();
+  const cartTotal = useCartStore(selectCartTotal);
+
+  const isTableEdit = from === 'orders' && !!tableId;
+  const activeTable = diningTables.find(t => t.id === (activeTableId ?? tableId));
+
+  useEffect(() => {
+    if (tableId) {
+      loadTableOrderIntoCart(tableId);
+    }
+  }, [tableId, loadTableOrderIntoCart]);
+
+  const handleLeaveTableSale = useCallback(() => {
+    setLeavePopupVisible(true);
+  }, []);
+
+  const confirmLeaveTableSale = useCallback(() => {
+    clearCart();
+    setLeavePopupVisible(false);
+    leaveTableSale(router, from);
+  }, [clearCart, router, from]);
+
+  const [leavePopupVisible, setLeavePopupVisible] = useState(false);
   const [searchQ, setSearchQ] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
@@ -82,17 +117,30 @@ export default function POSScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Point of Sale"
+        title={activeTable ? `Sale · ${activeTable.name}` : 'Point of Sale'}
+        subtitle={
+          activeTable
+            ? `${activeTable.zone} · edit items, then save table order`
+            : undefined
+        }
+        onBack={isTableEdit ? handleLeaveTableSale : undefined}
         actions={[
           {
             icon: showSearch ? 'close-outline' : 'search-outline',
             onPress: () => {
               setShowSearch(!showSearch);
               if (showSearch) setSearchQ('');
-            }
+            },
           },
-          // { icon: 'alert-circle-outline', color: Colors.warning, onPress: () => router.push('/reports/low-stock' as any) },
-          { icon: 'time-outline', onPress: () => {} },
+          ...(isTableEdit
+            ? [
+                {
+                  icon: 'close-circle-outline' as const,
+                  color: Colors.textMuted,
+                  onPress: handleLeaveTableSale,
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -173,6 +221,7 @@ export default function POSScreen() {
                   <GridCard
                     title={item.name}
                     subtitle={`SKU: ${item.sku}`}
+                    image={item.imageUri ? { uri: item.imageUri } : undefined}
                     icon="cafe-outline"
                     iconColor={isOutOfStock ? Colors.textMuted : Colors.accent}
                     footerRight={`Rp ${item.sellPrice.toLocaleString()}`}
@@ -217,7 +266,7 @@ export default function POSScreen() {
         {/* Right Panel: Cart (Only on Tablet) */}
         {isTablet && (
           <View style={styles.cartPanel}>
-            <CartPanel />
+            <CartPanel navFrom={from === 'orders' ? 'orders' : 'pos'} />
           </View>
         )}
       </View>
@@ -226,14 +275,38 @@ export default function POSScreen() {
       {!isTablet && totalItems > 0 && (
         <View style={[styles.floatingCart, { bottom: insets.bottom + Spacing.md }]}>
           <Button
-            label={`View Cart (${totalItems}) • Rp ${getTotal().toLocaleString()}`}
+            label={`View Cart (${totalItems}) • Rp ${cartTotal.toLocaleString()}`}
             variant="primary"
             iconLeft="cart"
             fullWidth
-            onPress={() => router.push('/pos/cart')}
+            onPress={() =>
+              router.push({
+                pathname: '/pos/cart',
+                params: {
+                  from: from ?? '',
+                  tableId: tableId ?? '',
+                },
+              })
+            }
           />
         </View>
       )}
+
+      {/* Leave table popup */}
+      <Popup
+        visible={leavePopupVisible}
+        onClose={() => setLeavePopupVisible(false)}
+        icon="exit-outline"
+        iconColor={Colors.warning}
+        title="Leave table?"
+        description="Your cart will be cleared. The table order on file stays unchanged until you save."
+        dismissable
+        actions={[
+          { label: 'Stay', variant: 'outline', onPress: () => setLeavePopupVisible(false) },
+          { label: 'Leave', variant: 'primary', onPress: confirmLeaveTableSale },
+        ]}
+        actionsLayout="row"
+      />
 
       {/* Out of stock alert popup */}
       <Popup

@@ -1,16 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  View,
-  StyleSheet,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  Alert,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Header, Colors, Spacing, Typography, Radius, Popup } from '../../../components/ui';
-import { usePosStore, TransactionItem } from '../../../store/usePosStore';
-import { Ionicons } from '@expo/vector-icons';
+import { Colors, Header, Popup, Radius, Spacing, Typography } from '../../../components/ui';
+import { useAppPopup } from '../../../hooks/useAppPopup';
+import { TransactionItem, usePosStore } from '../../../store/usePosStore';
 import { printReceipt } from '../../../utils/bluetoothPrinter';
 
 // ── Reusable Confirmation Popup ─────────────────────────────────────────────
@@ -309,6 +309,7 @@ const voidStyles = StyleSheet.create({
 // ── Main Screen ─────────────────────────────────────────────────────────────
 export default function TransactionsDetailScreen() {
   const router = useRouter();
+  const { showMessage, AppPopup } = useAppPopup();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { transactions, products, getRecipeCost, voidTransaction, voidTransactionItem, storeSettings } = usePosStore();
 
@@ -322,13 +323,23 @@ export default function TransactionsDetailScreen() {
     try {
       const success = await printReceipt(tx, storeSettings);
       if (success) {
-        Alert.alert('Success', 'Receipt sent to printer.');
+        showMessage({ title: 'Success', description: 'Receipt sent to printer.' });
       } else {
-        Alert.alert('Failed', 'Could not print receipt. Please check printer connection in Settings.');
+        showMessage({
+          title: 'Failed',
+          description: 'Could not print receipt. Please check printer connection in Settings.',
+          icon: 'alert-circle-outline',
+          iconColor: Colors.error,
+        });
       }
     } catch (err: any) {
       console.error('Reprint error:', err);
-      Alert.alert('Error', err.message || 'An error occurred.');
+      showMessage({
+        title: 'Error',
+        description: err.message || 'An error occurred.',
+        icon: 'alert-circle-outline',
+        iconColor: Colors.error,
+      });
     }
   };
 
@@ -387,7 +398,7 @@ export default function TransactionsDetailScreen() {
           <Text style={styles.receiptAddress}>{storeSettings.address}</Text>
 
           <View style={styles.statusBadgeRow}>
-            <Text style={styles.receiptId}>ID: {tx.id.substring(0, 6)}</Text>
+            <Text style={styles.receiptId}>ID: {tx.id.substring(0, 8)}</Text>
             <View style={[styles.statusBadge, { backgroundColor: tx.status === 'CANCELED' ? Colors.error + '20' : Colors.success + '20' }]}>
               <Text style={[styles.statusText, { color: tx.status === 'CANCELED' ? Colors.error : Colors.success }]}>
                 {tx.status}
@@ -540,6 +551,7 @@ export default function TransactionsDetailScreen() {
         items={tx.items}
         onVoidItem={(productId, qty) => voidTransactionItem(tx.id, productId, qty)}
       />
+      <AppPopup />
     </View>
   );
 }
@@ -559,7 +571,7 @@ const styles = StyleSheet.create({
   },
   receiptHeader: { color: Colors.text, fontSize: Typography.xl, fontWeight: '800', textAlign: 'center', marginBottom: Spacing.xs },
   receiptAddress: { color: Colors.textSecondary, fontSize: 10, textAlign: 'center', marginBottom: Spacing.xs },
-  receiptId: { color: Colors.textMuted, fontSize: Typography.xs, textAlign: 'center', fontFamily: 'monospace' },
+  receiptId: { color: Colors.textMuted, fontSize: Typography.xs, textAlign: 'center', fontFamily: 'monospace', textTransform: 'uppercase',minWidth: 80 },
   receiptDate: { color: Colors.textSecondary, fontSize: Typography.sm, textAlign: 'center', marginBottom: Spacing.md },
   divider: { height: 1, backgroundColor: Colors.surfaceBorder, marginVertical: Spacing.md },
 

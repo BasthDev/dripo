@@ -19,7 +19,11 @@ export default function TransactionsMonthScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title={monthName} subtitle="Sales List" onBack={() => router.back()} />
+      <Header
+        title={monthName}
+        subtitle="Sales List"
+        onBack={() => router.push('/transactions')}
+      />
       {filtered.length === 0 ? (
         <View style={styles.empty}>
           <EmptyStateCard
@@ -54,7 +58,7 @@ export default function TransactionsMonthScreen() {
                 >
                   <View style={styles.rowTop}>
                     <Text style={[styles.rowTitle, isCanceled && styles.textMuted]}>
-                      Tx: {item.id.substring(0, 6)}
+                      Tx: {item.id.substring(0, 8)}
                     </Text>
                     {isCanceled && (
                       <View style={styles.voidBadge}>

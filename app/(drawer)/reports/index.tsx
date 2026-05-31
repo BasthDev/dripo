@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors, Header, Radius, Spacing, Typography } from '../../../components/ui';
-import { usePosStore, Ingredient } from '../../../store/usePosStore';
+import { Ingredient, usePosStore } from '../../../store/usePosStore';
 import { buildDailyBuckets, computeTodayStats, formatRpShort } from '../../../utils/salesAnalytics';
 
 type MenuItem = {
@@ -33,8 +33,15 @@ const analyticsItems: MenuItem[] = [
 
 const activityItems: MenuItem[] = [
   {
-    title: 'Inventory Expenses',
-    desc: 'Purchase costs from stock receiving',
+    title: 'Purchases',
+    desc: 'Orders, receive stock, and history',
+    icon: 'cart-outline',
+    color: Colors.primary,
+    path: '/procurement/purchases',
+  },
+  {
+    title: 'Expenses',
+    desc: 'COGS from purchases + operating costs',
     icon: 'wallet-outline',
     color: Colors.error,
     path: '/reports/expenses',
@@ -177,7 +184,7 @@ export default function ReportsIndex() {
           />
         ))}
 
-        <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>INVENTORY HEALTH</Text>
+        {/* <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>INVENTORY HEALTH</Text>
 
         <TouchableOpacity
           style={[styles.menuCard, lowStockItems.length > 0 && styles.menuCardAlert]}
@@ -217,7 +224,7 @@ export default function ReportsIndex() {
             </View>
           )}
           <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </ScrollView>
     </View>
   );

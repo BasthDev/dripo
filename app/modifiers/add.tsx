@@ -1,23 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
-  Button,
-  Colors,
-  Dropdown,
-  DropdownOption,
-  Header,
-  InputField,
-  Popup,
-  Radius,
-  Spacing,
-  Typography,
+    Button,
+    Colors,
+    Dropdown,
+    DropdownOption,
+    Header,
+    InputField,
+    Popup,
+    Radius,
+    Spacing,
+    Typography,
 } from '../../components/ui';
+import { useAppPopup } from '../../hooks/useAppPopup';
 import { usePosStore } from '../../store/usePosStore';
 
 export default function AddModifierScreen() {
   const router = useRouter();
+  const { showConfirm, showMessage, AppPopup } = useAppPopup();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const modifiers = usePosStore(s => s.modifiers);
   const ingredients = usePosStore(s => s.ingredients);
@@ -90,6 +92,29 @@ export default function AddModifierScreen() {
     router.back();
   };
 
+  const handleDelete = () => {
+    if (!id) return;
+    if (isModifierInUse(id)) {
+      showMessage({
+        title: 'Cannot Delete',
+        description: 'This modifier is assigned to one or more products.',
+        icon: 'alert-circle-outline',
+        iconColor: Colors.error,
+      });
+      return;
+    }
+    showConfirm({
+      title: 'Delete Modifier',
+      description: 'Are you sure?',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => {
+        deleteModifier(id);
+        router.back();
+      },
+    });
+  };
+
   return (
     <View style={styles.container}>
       <Header
@@ -101,26 +126,7 @@ export default function AddModifierScreen() {
                 {
                   icon: 'trash-outline' as const,
                   color: Colors.error,
-                  onPress: () => {
-                    if (isModifierInUse(id)) {
-                      Alert.alert(
-                        'Cannot Delete',
-                        'This modifier is assigned to one or more products.'
-                      );
-                      return;
-                    }
-                    Alert.alert('Delete Modifier', 'Are you sure?', [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: () => {
-                          deleteModifier(id);
-                          router.back();
-                        },
-                      },
-                    ]);
-                  },
+                  onPress: handleDelete,
                 },
               ]
             : undefined
@@ -219,6 +225,7 @@ export default function AddModifierScreen() {
           containerStyle={{ marginTop: Spacing.md }}
         />
       </Popup>
+      <AppPopup />
     </View>
   );
 }

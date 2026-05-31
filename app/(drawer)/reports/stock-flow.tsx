@@ -3,6 +3,7 @@ import React from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Colors, Header, Radius, Spacing, Typography } from '../../../components/ui';
 import { usePosStore } from '../../../store/usePosStore';
+import { MOVEMENT_REASON_LABELS } from '../../../utils/inventoryLabels';
 
 export default function StockFlowScreen() {
   const router = useRouter();
@@ -34,7 +35,9 @@ export default function StockFlowScreen() {
               <View style={styles.row}>
                 <View style={styles.left}>
                   <Text style={styles.ingName}>{ing ? ing.name : 'Deleted Ingredient'}</Text>
-                  <Text style={styles.meta}>{dateStr} • {item.reason}</Text>
+                  <Text style={styles.meta}>
+                    {dateStr} • {MOVEMENT_REASON_LABELS[item.reason] ?? item.reason}
+                  </Text>
                 </View>
                 <View style={styles.right}>
                   <Text style={[styles.qty, { color: isOut ? Colors.error : Colors.success }]}>

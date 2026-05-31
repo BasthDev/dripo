@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Text, Switch, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Header, InputField, Button, Dropdown, DropdownOption, Colors, Spacing, Typography, Radius } from '../../components/ui';
 import { usePosStore } from '../../store/usePosStore';
+import {
+  pickProductImageFromLibrary,
+  persistProductImage,
+  removeProductImageFile,
+} from '../../utils/productImage';
 
 export default function AddProductScreen() {
   const router = useRouter();
@@ -18,6 +25,9 @@ export default function AddProductScreen() {
   const [buyPrice, setBuyPrice] = useState('');
   const [sellPrice, setSellPrice] = useState('');
   const [modifierIds, setModifierIds] = useState<string[]>([]);
+  const [imageUri, setImageUri] = useState<string | undefined>();
+  const [pendingImageUri, setPendingImageUri] = useState<string | null>(null);
+  const [pickingImage, setPickingImage] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -31,6 +41,8 @@ export default function AddProductScreen() {
         setBuyPrice(existing.buyPrice ? existing.buyPrice.toString() : '');
         setSellPrice(existing.sellPrice.toString());
         setModifierIds(existing.modifierIds ?? []);
+        setImageUri(existing.imageUri);
+        setPendingImageUri(null);
       }
     }
   }, [id, products]);
@@ -47,7 +59,39 @@ export default function AddProductScreen() {
     value: r.id
   }));
 
-  const handleSave = () => {
+  const handlePickImage = async () => {
+    setPickingImage(true);
+    try {
+      const picked = await pickProductImageFromLibrary();
+      if (!picked) return;
+
+      if (id) {
+        const saved = await persistProductImage(id, picked);
+        if (imageUri && imageUri !== saved) {
+          await removeProductImageFile(imageUri);
+        }
+        setImageUri(saved);
+        setPendingImageUri(null);
+        updateProduct(id, { imageUri: saved });
+      } else {
+        setPendingImageUri(picked);
+        setImageUri(picked);
+      }
+    } finally {
+      setPickingImage(false);
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    if (id && imageUri) {
+      await removeProductImageFile(imageUri);
+      updateProduct(id, { imageUri: undefined });
+    }
+    setImageUri(undefined);
+    setPendingImageUri(null);
+  };
+
+  const handleSave = async () => {
     if (!name.trim() || !sellPrice) return;
     const sellParsed = parseFloat(sellPrice);
     if (isNaN(sellParsed)) return;
@@ -73,9 +117,14 @@ export default function AddProductScreen() {
     };
 
     if (id) {
-      updateProduct(id, payload);
+      updateProduct(id, { ...payload, imageUri });
     } else {
       addProduct(payload);
+      const created = usePosStore.getState().products.at(-1);
+      if (created && pendingImageUri) {
+        const saved = await persistProductImage(created.id, pendingImageUri);
+        updateProduct(created.id, { imageUri: saved });
+      }
     }
     
     router.back();
@@ -118,6 +167,40 @@ export default function AddProductScreen() {
       />
       
       <ScrollView contentContainerStyle={styles.content}>
+
+        <View style={styles.imageSection}>
+          <Text style={styles.imageLabel}>Product photo</Text>
+          <Text style={styles.imageHint}>Shown on the POS product grid. Saved locally on this device.</Text>
+          <View style={styles.imagePreviewBox}>
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.productImage} contentFit="cover" />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Ionicons name="image-outline" size={48} color={Colors.textMuted} />
+                <Text style={styles.imagePlaceholderText}>No photo</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.imageActions}>
+            <Button
+              label={imageUri ? 'Change photo' : 'Upload photo'}
+              variant="secondary"
+              iconLeft="cloud-upload-outline"
+              onPress={handlePickImage}
+              loading={pickingImage}
+              style={styles.imageBtn}
+            />
+            {imageUri ? (
+              <Button
+                label="Remove"
+                variant="outline"
+                iconLeft="trash-outline"
+                onPress={handleRemoveImage}
+                style={styles.imageBtn}
+              />
+            ) : null}
+          </View>
+        </View>
         
         <InputField
           label="SKU (Barcode)"
@@ -260,6 +343,29 @@ export default function AddProductScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: Spacing.lg, gap: Spacing.xl, paddingBottom: 40 },
+  imageSection: { gap: Spacing.sm },
+  imageLabel: { color: Colors.text, fontSize: Typography.md, fontWeight: '600' },
+  imageHint: { color: Colors.textMuted, fontSize: Typography.xs },
+  imagePreviewBox: {
+    width: '100%',
+    aspectRatio: 1,
+    maxHeight: 200,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+  },
+  productImage: { width: '100%', height: '100%' },
+  imagePlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+  },
+  imagePlaceholderText: { color: Colors.textMuted, fontSize: Typography.sm },
+  imageActions: { flexDirection: 'row', gap: Spacing.sm },
+  imageBtn: { flex: 1 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surfaceElevated, padding: Spacing.md, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.surfaceBorder },
   toggleLabel: { color: Colors.text, fontSize: Typography.md, fontWeight: '600' },
   toggleDesc: { color: Colors.textSecondary, fontSize: Typography.xs, marginTop: 2, maxWidth: 220 },

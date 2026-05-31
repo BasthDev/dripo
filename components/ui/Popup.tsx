@@ -30,6 +30,8 @@ interface PopupProps {
   icon?: keyof typeof Ionicons.glyphMap;
   iconColor?: string;
   actions?: PopupAction[];
+  /** stack = vertical; row = side-by-side (default row when 2 actions) */
+  actionsLayout?: 'stack' | 'row' | 'auto';
   dismissable?: boolean;
   children?: React.ReactNode;
   contentStyle?: ViewStyle;
@@ -43,6 +45,7 @@ export default function Popup({
   icon,
   iconColor = Colors.primary,
   actions = [],
+  actionsLayout = 'auto',
   dismissable = true,
   children,
   contentStyle,
@@ -66,6 +69,10 @@ export default function Popup({
       ]).start();
     }
   }, [visible]);
+
+  const useRowActions =
+    actionsLayout === 'row' ||
+    (actionsLayout === 'auto' && actions.length === 2);
 
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={dismissable ? onClose : undefined}>
@@ -115,7 +122,7 @@ export default function Popup({
 
             {/* Actions */}
             {actions.length > 0 && (
-              <View style={styles.actions}>
+              <View style={[styles.actions, useRowActions && styles.actionsRow]}>
                 {actions.map((action, index) => (
                   <Button
                     key={index}
@@ -125,6 +132,7 @@ export default function Popup({
                     iconLeft={action.icon}
                     fullWidth
                     size="md"
+                    style={useRowActions ? styles.actionBtnRow : undefined}
                   />
                 ))}
               </View>
@@ -197,5 +205,12 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: Spacing.sm,
     marginTop: Spacing.md,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  actionBtnRow: {
+    flex: 1,
   },
 });

@@ -15,8 +15,10 @@ import {
 
 import { Colors, Radius, Spacing, Typography } from '../../components/ui';
 import {
+  isOrdersActive as checkOrdersActive,
   isDashboardActive,
   isPosRouteActive,
+  isProcurementActive,
   isRouteActive,
 } from '../../utils/drawerNav';
 
@@ -25,6 +27,7 @@ function CustomDrawerContent(props: any) {
   const pathname = usePathname();
 
   const [isManagementExpanded, setManagementExpanded] = useState(true);
+  const [isPurchasingExpanded, setPurchasingExpanded] = useState(true);
   const [isLandscape, setIsLandscape] = useState(false);
 
   const go = (href: string, isActive: boolean) => {
@@ -81,7 +84,10 @@ function CustomDrawerContent(props: any) {
     '/ingredients',
   ].some((p) => pathname.includes(p));
 
+  const isProcActive = isProcurementActive(pathname);
+
   const isPosActive = isPosRouteActive(pathname);
+  const isOrdersActive = checkOrdersActive(pathname);
   const isDashboard = isDashboardActive(pathname);
 
   return (
@@ -90,7 +96,7 @@ function CustomDrawerContent(props: any) {
         {...props}
         contentContainerStyle={{
           flexGrow: 1,
-          paddingBottom: Spacing.md,
+          paddingBottom: Spacing.xxxl * 2,
         }}
       >
         <View style={styles.drawerHeader}>
@@ -110,7 +116,7 @@ function CustomDrawerContent(props: any) {
           </View>
         </View>
 
-        <View style={styles.separator} />
+        {/* <View style={styles.separator} /> */}
 
         <DrawerItem
           label="Dashboard"
@@ -233,7 +239,7 @@ function CustomDrawerContent(props: any) {
             />
 
             <DrawerItem
-              label="Inventory (Stock)"
+              label="Ingredients"
               icon={({ color, size }) => (
                 <Ionicons
                   name="cube-outline"
@@ -257,8 +263,102 @@ function CustomDrawerContent(props: any) {
 
         <View style={styles.separator} />
 
+        <TouchableOpacity
+          style={styles.dropdownHeader}
+          onPress={() => setPurchasingExpanded(!isPurchasingExpanded)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.dropdownHeaderLeft}>
+            <Ionicons
+              name="cart-outline"
+              size={24}
+              color={isProcActive ? Colors.primary : Colors.text}
+            />
+            <Text
+              style={[
+                styles.dropdownHeaderText,
+                isProcActive && { color: Colors.primary },
+              ]}
+            >
+              Purchasing
+            </Text>
+          </View>
+          <Ionicons
+            name={isPurchasingExpanded ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color={isProcActive ? Colors.primary : Colors.text}
+          />
+        </TouchableOpacity>
+
+        {isPurchasingExpanded && (
+          <View style={styles.dropdownContent}>
+            <DrawerItem
+              label="Purchases"
+              icon={({ color, size }) => (
+                <Ionicons name="receipt-outline" size={size} color={color} />
+              )}
+              onPress={() =>
+                go(
+                  '/procurement/purchases',
+                  pathname.includes('/procurement/purchases')
+                )
+              }
+              focused={pathname.includes('/procurement/purchases')}
+              activeTintColor={Colors.primary}
+              inactiveTintColor={Colors.textSecondary}
+              labelStyle={styles.subLabel}
+            />
+            <DrawerItem
+              label="Suppliers"
+              icon={({ color, size }) => (
+                <Ionicons name="business-outline" size={size} color={color} />
+              )}
+              onPress={() =>
+                go(
+                  '/(drawer)/suppliers',
+                  pathname.includes('/suppliers')
+                )
+              }
+              focused={pathname.includes('/suppliers')}
+              activeTintColor={Colors.primary}
+              inactiveTintColor={Colors.textSecondary}
+              labelStyle={styles.subLabel}
+            />
+            <DrawerItem
+              label="Stock Opname"
+              icon={({ color, size }) => (
+                <Ionicons name="scan-outline" size={size} color={color} />
+              )}
+              onPress={() =>
+                go(
+                  '/procurement/stock-opname',
+                  pathname.includes('/stock-opname')
+                )
+              }
+              focused={pathname.includes('/stock-opname')}
+              activeTintColor={Colors.primary}
+              inactiveTintColor={Colors.textSecondary}
+              labelStyle={styles.subLabel}
+            />
+          </View>
+        )}
+
+        <View style={styles.separator} />
+
         <DrawerItem
-          label="Sale"
+          label="Tables"
+          icon={({ color, size }) => (
+            <Ionicons name="grid-outline" size={size} color={color} />
+          )}
+          onPress={() => go('/orders', isOrdersActive)}
+          focused={isOrdersActive}
+          activeTintColor={Colors.primary}
+          inactiveTintColor={Colors.text}
+          labelStyle={styles.drawerLabel}
+        />
+
+        <DrawerItem
+          label="New Order"
           icon={({ color, size }) => (
             <Ionicons
               name="bag-handle-outline"
@@ -383,10 +483,19 @@ export default function DrawerLayout() {
       }}
     >
       <Drawer.Screen name="index" />
+      <Drawer.Screen name="orders" />
       <Drawer.Screen name="pos" />
       <Drawer.Screen name="products" />
       <Drawer.Screen name="recipes" />
       <Drawer.Screen name="ingredients" />
+      <Drawer.Screen
+        name="procurement"
+        options={{ drawerItemStyle: { display: 'none' } }}
+      />
+      <Drawer.Screen
+        name="suppliers"
+        options={{ drawerItemStyle: { display: 'none' } }}
+      />
       <Drawer.Screen name="categories" />
       <Drawer.Screen name="transactions" />
       <Drawer.Screen name="reports" />
@@ -401,6 +510,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
+    paddingBottom: Spacing.lg,
   },
 
   logoContainer: {
@@ -438,7 +548,7 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: Colors.surfaceBorder,
-    marginVertical: Spacing.sm,
+    // marginVertical: Spacing.sm,
     marginHorizontal: Spacing.lg,
   },
 
@@ -479,6 +589,7 @@ const styles = StyleSheet.create({
 
   dropdownContent: {
     paddingLeft: Spacing.md,
+    paddingBottom: Spacing.xs,
   },
 
   drawerFooter: {

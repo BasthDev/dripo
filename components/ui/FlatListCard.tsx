@@ -1,16 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useRef } from 'react';
 import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
-  Animated,
-  ViewStyle,
-  ImageSourcePropType,
+    Animated,
+    Image,
+    ImageSourcePropType,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    ViewStyle,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Radius, Typography, Shadow } from './theme';
+import { Colors, Radius, Shadow, Spacing, Typography } from './theme';
 
 interface FlatListCardProps {
   title: string;
@@ -146,6 +146,7 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: Radius.md,
     backgroundColor: Colors.surfaceElevated,
+    resizeMode: 'cover',
   },
   imagePlaceholder: {
     width: 56,

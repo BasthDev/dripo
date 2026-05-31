@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Alert } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Header, InputField, Button, Popup, Colors, Spacing, Typography, Radius, DropdownOption, Dropdown } from '../../components/ui';
-import { usePosStore, RecipeIngredient } from '../../store/usePosStore';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Button, Colors, Dropdown, DropdownOption, Header, InputField, Popup, Radius, Spacing, Typography } from '../../components/ui';
+import { useAppPopup } from '../../hooks/useAppPopup';
+import { RecipeIngredient, usePosStore } from '../../store/usePosStore';
 
 export default function AddRecipeScreen() {
   const router = useRouter();
+  const { showConfirm, showMessage, AppPopup } = useAppPopup();
   const { id } = useLocalSearchParams<{ id?: string }>();
   
   const [name, setName] = useState('');
@@ -99,6 +101,29 @@ export default function AddRecipeScreen() {
   const selectedIng = ingredients.find(i => i.id === selectedIngredientId);
   const unitStr = selectedIng ? (selectedIng.type === 'WEIGHT' ? 'grams' : selectedIng.type === 'VOLUME' ? 'ml' : 'pcs') : 'units';
 
+  const handleDelete = () => {
+    if (!id) return;
+    if (isRecipeInUse(id)) {
+      showMessage({
+        title: 'Cannot Delete',
+        description: 'This recipe is linked to one or more products. Unlink them first.',
+        icon: 'alert-circle-outline',
+        iconColor: Colors.error,
+      });
+      return;
+    }
+    showConfirm({
+      title: 'Delete Recipe',
+      description: 'Are you sure?',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => {
+        deleteRecipe(id);
+        router.back();
+      },
+    });
+  };
+
   return (
     <View style={styles.container}>
       <Header
@@ -107,26 +132,7 @@ export default function AddRecipeScreen() {
         actions={id ? [{
           icon: 'trash-outline',
           color: Colors.error,
-          onPress: () => {
-            if (isRecipeInUse(id)) {
-              Alert.alert(
-                'Cannot Delete',
-                'This recipe is linked to one or more products. Unlink them first.'
-              );
-              return;
-            }
-            Alert.alert('Delete Recipe', 'Are you sure?', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: () => {
-                  deleteRecipe(id);
-                  router.back();
-                },
-              },
-            ]);
-          },
+          onPress: handleDelete,
         }] : undefined}
       />
       
@@ -231,6 +237,7 @@ export default function AddRecipeScreen() {
           )}
         </View>
       </Popup>
+      <AppPopup />
     </View>
   );
 }

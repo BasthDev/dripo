@@ -2,16 +2,37 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { getCartLineUnitPrice, useCartStore } from '../../store/useCartStore';
+import { getCartLineUnitPrice, selectCartTotal, useCartStore } from '../../store/useCartStore';
 import { usePosStore } from '../../store/usePosStore';
+import { useAppPopup } from '../../hooks/useAppPopup';
+import {
+    navigateToSelectTable,
+    saveTableOrderAndContinue,
+    type TableOrderNavFrom,
+} from '../../utils/tableOrderFlow';
 import { Button, Colors, Radius, Spacing, Typography } from '../ui';
 import CartItemNotePopup from './CartItemNotePopup';
 import CartModifierPopup from './CartModifierPopup';
 
-export default function CartPanel() {
+type CartPanelProps = {
+  /** Where Sale was opened from — drives save success navigation */
+  navFrom?: TableOrderNavFrom;
+};
+
+export default function CartPanel({ navFrom = 'pos' }: CartPanelProps) {
   const router = useRouter();
-  const { items, updateQuantity, updateItemNote, updateItemModifiers, removeItem, getTotal, getCartItemsForCheck } =
-    useCartStore();
+  const { showMessage, AppPopup } = useAppPopup();
+  const {
+    items,
+    updateQuantity,
+    updateItemNote,
+    updateItemModifiers,
+    removeItem,
+    getCartItemsForCheck,
+    activeTableId,
+    orderNote,
+  } = useCartStore();
+  const cartTotal = useCartStore(selectCartTotal);
   const canAddToCart = usePosStore((state) => state.canAddToCart);
   const modifiers = usePosStore((state) => state.modifiers);
 
@@ -28,24 +49,39 @@ export default function CartPanel() {
 
   const handleCheckout = () => {
     if (items.length > 0) {
-      router.push('/pos/payment');
+      router.push({
+        pathname: '/pos/payment',
+        params: activeTableId
+          ? { from: navFrom, tableId: activeTableId }
+          : undefined,
+      });
     }
+  };
+
+  const handleSaveTableOrder = () => {
+    if (!items.length) {
+      showMessage({
+        title: 'Empty cart',
+        description: 'Add items before saving the table order.',
+        icon: 'cart-outline',
+        iconColor: Colors.warning,
+      });
+      return;
+    }
+    if (!activeTableId) {
+      navigateToSelectTable(router);
+      return;
+    }
+    void saveTableOrderAndContinue(router, {
+      tableId: activeTableId,
+      items,
+      orderNote,
+      navFrom,
+    });
   };
 
   return (
     <View style={styles.container}>
-      {/* <View style={styles.header}>
-        <Ionicons name="cart-outline" size={24} color={Colors.text} />
-        <Text style={styles.headerTitle}>Current Order</Text>
-        {items.length > 0 && (
-          <View style={styles.itemCountBadge}>
-            <Text style={styles.itemCountText}>
-              {items.reduce((s, i) => s + i.quantity, 0)}
-            </Text>
-          </View>
-        )}
-      </View> */}
-
       {items.length === 0 ? (
         <View style={styles.empty}>
           <Ionicons name="basket-outline" size={48} color={Colors.surfaceBorder} />
@@ -167,10 +203,18 @@ export default function CartPanel() {
       <View style={styles.footer}>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Total</Text>
-          <Text style={styles.summaryValue}>Rp {getTotal().toLocaleString()}</Text>
+          <Text style={styles.summaryValue}>Rp {cartTotal.toLocaleString()}</Text>
         </View>
         <Button
-          label="Proceed to Payment"
+          label="Save table order"
+          variant="secondary"
+          fullWidth
+          iconLeft="bookmark-outline"
+          disabled={items.length === 0}
+          onPress={handleSaveTableOrder}
+        />
+        <Button
+          label={activeTableId ? 'Pay now' : 'Proceed to Payment'}
           variant="primary"
           fullWidth
           disabled={items.length === 0}
@@ -199,6 +243,7 @@ export default function CartPanel() {
           setModifierTargetId(null);
         }}
       />
+      <AppPopup />
     </View>
   );
 }
@@ -210,30 +255,6 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderLeftColor: Colors.surfaceBorder,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceBorder,
-    gap: Spacing.sm,
-  },
-  headerTitle: {
-    color: Colors.text,
-    fontSize: Typography.lg,
-    fontWeight: '700',
-    flex: 1,
-  },
-  itemCountBadge: {
-    backgroundColor: Colors.primary,
-    borderRadius: 99,
-    minWidth: 22,
-    height: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-  },
-  itemCountText: { color: Colors.white, fontSize: 11, fontWeight: '800' },
   empty: {
     flex: 1,
     alignItems: 'center',

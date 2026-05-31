@@ -4,6 +4,8 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { ensureCategoryColor, pickCategoryColor } from '../utils/categoryColors';
 import { mergeRecipeLines, recipeIngredientsToLines } from '../utils/modifierUtils';
+import { mergeTableOrderLines } from '../utils/tableOrderLines';
+import { removeProductImageFile } from '../utils/productImage';
 
 // ── Types ──
 export type IngredientType = 'WEIGHT' | 'VOLUME' | 'QUANTITY';
@@ -52,6 +54,8 @@ export interface Product {
   buyPrice?: number;
   sellPrice: number;
   modifierIds?: string[];
+  /** Local file URI for POS grid image */
+  imageUri?: string;
 }
 
 export interface StoreSettings {
@@ -91,15 +95,135 @@ export interface TransactionItem {
   appliedModifiers?: { id: string; name: string; sellPriceDelta: number }[];
 }
 
+export type OperatingExpenseType =
+  | 'RENT'
+  | 'UTILITIES'
+  | 'SALARY'
+  | 'MARKETING'
+  | 'MAINTENANCE'
+  | 'SUPPLIES'
+  | 'OTHER';
+
 export interface Expense {
   id: string;
   timestamp: string;
+  category: 'INVENTORY' | 'OPERATING';
+  totalAmount: number;
+  note?: string;
+  /** Inventory purchase (from stock in) */
+  stockInId?: string;
+  documentNo?: string;
+  supplierId?: string;
+  supplierName?: string;
+  /** Operating expense */
+  title?: string;
+  operatingType?: OperatingExpenseType;
+  ingredientId?: string;
+  ingredientName?: string;
+  quantity?: number;
+  unitCost?: number;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  note?: string;
+}
+
+export interface StockInLine {
   ingredientId: string;
   ingredientName: string;
   quantity: number;
   unitCost: number;
+  lineTotal: number;
+}
+
+/** Goods receipt / stock-in document (like Majoo "Pembelian" / GRN) */
+export interface StockInDocument {
+  id: string;
+  documentNo: string;
+  timestamp: string;
+  supplierId?: string;
+  supplierName?: string;
+  invoiceNo?: string;
+  purchaseOrderId?: string;
+  lines: StockInLine[];
   totalAmount: number;
   note?: string;
+  expenseRecorded: boolean;
+}
+
+export type PurchaseOrderStatus = 'DRAFT' | 'RECEIVED' | 'CANCELED';
+
+export interface PurchaseOrderLine {
+  ingredientId: string;
+  ingredientName: string;
+  quantity: number;
+  unitCost: number;
+  lineTotal: number;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  documentNo: string;
+  timestamp: string;
+  supplierId?: string;
+  supplierName?: string;
+  status: PurchaseOrderStatus;
+  lines: PurchaseOrderLine[];
+  totalAmount: number;
+  note?: string;
+  stockInId?: string;
+}
+
+export interface StockOpnameLine {
+  ingredientId: string;
+  ingredientName: string;
+  systemQty: number;
+  countedQty: number;
+  variance: number;
+  unitCost: number;
+  varianceValue: number;
+}
+
+export interface StockOpnameDocument {
+  id: string;
+  documentNo: string;
+  timestamp: string;
+  reason: string;
+  lines: StockOpnameLine[];
+  note?: string;
+}
+
+export type TableOrderStatus = 'OPEN' | 'PAID';
+
+export interface TableOrderLine {
+  productId: string;
+  quantity: number;
+  note?: string;
+  modifierIds?: string[];
+}
+
+export interface DiningTable {
+  id: string;
+  name: string;
+  zone: string;
+  sortOrder: number;
+}
+
+export interface TableOrder {
+  id: string;
+  tableId: string;
+  documentNo: string;
+  createdAt: string;
+  updatedAt: string;
+  status: TableOrderStatus;
+  lines: TableOrderLine[];
+  orderNote?: string;
+  transactionId?: string;
 }
 
 export interface Transaction {
@@ -116,7 +240,15 @@ export interface Transaction {
 
 // Movement Types
 export type MovementType = 'IN' | 'OUT';
-export type MovementReason = 'INITIAL' | 'MANUAL_ADJUSTMENT' | 'SALE' | 'VOID_ORDER' | 'VOID_ITEM' | 'PURCHASE';
+export type MovementReason =
+  | 'INITIAL'
+  | 'MANUAL_ADJUSTMENT'
+  | 'SALE'
+  | 'VOID_ORDER'
+  | 'VOID_ITEM'
+  | 'PURCHASE'
+  | 'STOCK_OPNAME'
+  | 'WASTE';
 
 export interface StockMovement {
   id: string;
@@ -124,8 +256,9 @@ export interface StockMovement {
   timestamp: string;
   type: MovementType;
   reason: MovementReason;
-  quantityDiff: number; // e.g. +100 or -50
+  quantityDiff: number;
   note?: string;
+  referenceId?: string;
 }
 
 // ── Cart Item shape (used for stock checks, defined here to avoid circular deps) ──
@@ -165,6 +298,13 @@ interface PosState {
   movements: StockMovement[];
   modifiers: ProductModifier[];
   expenses: Expense[];
+  stockIns: StockInDocument[];
+  suppliers: Supplier[];
+  purchaseOrders: PurchaseOrder[];
+  stockOpnames: StockOpnameDocument[];
+  tableZones: string[];
+  diningTables: DiningTable[];
+  tableOrders: TableOrder[];
   storeSettings: StoreSettings;
 
   // Actions
@@ -190,6 +330,60 @@ interface PosState {
     unitCost: number;
     note?: string;
     recordExpense?: boolean;
+    supplierId?: string;
+    supplierName?: string;
+    invoiceNo?: string;
+  }) => string | null;
+
+  createStockIn: (params: {
+    lines: { ingredientId: string; quantity: number; unitCost: number }[];
+    supplierId?: string;
+    supplierName?: string;
+    invoiceNo?: string;
+    note?: string;
+    recordExpense?: boolean;
+    purchaseOrderId?: string;
+  }) => string | null;
+
+  nextStockInDocumentNo: () => string;
+
+  addSupplier: (supplier: Omit<Supplier, 'id'>) => void;
+  updateSupplier: (id: string, supplier: Partial<Supplier>) => void;
+  deleteSupplier: (id: string) => boolean;
+
+  addOperatingExpense: (params: {
+    title: string;
+    operatingType: OperatingExpenseType;
+    totalAmount: number;
+    note?: string;
+    timestamp?: string;
+  }) => void;
+
+  postStockOpname: (params: {
+    lines: { ingredientId: string; countedQty: number }[];
+    reason: string;
+    note?: string;
+  }) => string | null;
+
+  nextStockOpnameDocumentNo: () => string;
+
+  createPurchaseOrder: (params: {
+    lines: { ingredientId: string; quantity: number; unitCost: number }[];
+    supplierId?: string;
+    supplierName?: string;
+    note?: string;
+  }) => string;
+
+  receivePurchaseOrder: (purchaseOrderId: string, recordExpense?: boolean) => string | null;
+
+  cancelPurchaseOrder: (purchaseOrderId: string) => boolean;
+
+  nextPurchaseOrderDocumentNo: () => string;
+
+  recordWaste: (params: {
+    ingredientId: string;
+    quantity: number;
+    note?: string;
   }) => void;
 
   addCategory: (name: string, color?: string) => void;
@@ -235,6 +429,48 @@ interface PosState {
    * or whose stock is ≤ 0. Sorted by severity (most critical first).
    */
   getLowStockIngredients: () => Ingredient[];
+
+  resetAllData: () => Promise<void>;
+
+  addTableZone: (name: string) => void;
+  removeTableZone: (name: string) => void;
+  addDiningTable: (table: Omit<DiningTable, 'id' | 'sortOrder'>) => void;
+  addDiningTablesBulk: (params: { baseName: string; count: number; zone: string }) => number;
+  updateDiningTable: (id: string, updates: Partial<Pick<DiningTable, 'name' | 'zone'>>) => void;
+  deleteDiningTable: (id: string) => void;
+  getTableOrderForTable: (tableId: string) => TableOrder | undefined;
+  upsertOpenTableOrder: (params: {
+    tableId: string;
+    lines: TableOrderLine[];
+    orderNote?: string;
+    /** When true, add/increase qty on matching lines instead of replacing the whole order */
+    mergeLines?: boolean;
+  }) => string;
+  markTableOrderPaid: (tableOrderId: string, transactionId: string) => void;
+  clearTable: (tableId: string) => void;
+  nextTableOrderDocumentNo: () => string;
+}
+
+const DEFAULT_TABLE_ZONES = ['Indoor', 'Outdoor', 'Floor 1', 'Floor 2'];
+
+const DEFAULT_STORE_SETTINGS: StoreSettings = {
+  name: 'Dripo Coffee',
+  address: '123 Brew Avenue, Caffeine City',
+  phone: '+1 234 567 890',
+  social: '@dripo_coffee',
+  qrData: 'https://dripo.pos',
+  receiptFooter: 'Thank you for your visit!',
+};
+
+function calcWeightedAvgCost(
+  oldStock: number,
+  oldCost: number,
+  addQty: number,
+  addUnitCost: number
+): number {
+  const newStock = oldStock + addQty;
+  if (newStock <= 0) return addUnitCost;
+  return (oldStock * oldCost + addQty * addUnitCost) / newStock;
 }
 
 const addStockMovement = (state: PosState, movement: Omit<StockMovement, 'id' | 'timestamp'>) => {
@@ -256,14 +492,14 @@ export const usePosStore = create<PosState>()(
       movements: [],
       modifiers: [],
       expenses: [],
-      storeSettings: {
-        name: 'Dripo Coffee',
-        address: '123 Brew Avenue, Caffeine City',
-        phone: '+1 234 567 890',
-        social: '@dripo_coffee',
-        qrData: 'https://dripo.pos',
-        receiptFooter: 'Thank you for your visit!',
-      },
+      stockIns: [],
+      suppliers: [],
+      purchaseOrders: [],
+      stockOpnames: [],
+      tableZones: [...DEFAULT_TABLE_ZONES],
+      diningTables: [],
+      tableOrders: [],
+      storeSettings: { ...DEFAULT_STORE_SETTINGS },
       connectedPrinter: null,
 
       // Ingredients
@@ -381,57 +617,382 @@ export const usePosStore = create<PosState>()(
         return true;
       },
 
-      receiveStock: ({ ingredientId, quantity, unitCost, note, recordExpense }) => set((state) => {
-        const ing = state.ingredients.find(i => i.id === ingredientId);
-        if (!ing || quantity <= 0 || unitCost < 0) return state;
+      nextStockInDocumentNo: () => {
+        const { stockIns } = get();
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const todayCount =
+          stockIns.filter(s => s.documentNo.includes(date)).length + 1;
+        return `SI-${date}-${String(todayCount).padStart(3, '0')}`;
+      },
 
-        const movement = addStockMovement(state, {
-          ingredientId,
-          type: 'IN',
-          reason: 'PURCHASE',
-          quantityDiff: quantity,
-          note: note || 'Stock received',
+      createStockIn: (params) => {
+        const stockInId = uuid.v4() as string;
+        const documentNo = get().nextStockInDocumentNo();
+        const timestamp = new Date().toISOString();
+        const recordExpense = params.recordExpense !== false;
+
+        const supplierFromMaster = params.supplierId
+          ? get().suppliers.find(s => s.id === params.supplierId)
+          : undefined;
+        const resolvedSupplierName =
+          supplierFromMaster?.name ?? params.supplierName;
+        const resolvedSupplierId = params.supplierId ?? supplierFromMaster?.id;
+
+        let created = false;
+
+        set((state) => {
+          if (!params.lines.length) return state;
+
+          let ingredients = [...state.ingredients];
+          let recipes = [...state.recipes];
+          let movements = [...state.movements];
+          let purchaseOrders = [...state.purchaseOrders];
+          const lines: StockInLine[] = [];
+
+          for (const line of params.lines) {
+            const ing = ingredients.find(i => i.id === line.ingredientId);
+            if (!ing || line.quantity <= 0 || line.unitCost < 0) continue;
+
+            const newAvgCost = calcWeightedAvgCost(
+              ing.stock,
+              ing.costPerUnit,
+              line.quantity,
+              line.unitCost
+            );
+
+            ingredients = ingredients.map(i =>
+              i.id === line.ingredientId
+                ? { ...i, stock: i.stock + line.quantity, costPerUnit: newAvgCost }
+                : i
+            );
+
+            recipes = recipes.map(r => ({
+              ...r,
+              ingredients: r.ingredients.map(ri =>
+                ri.ingredientId === line.ingredientId
+                  ? { ...ri, snapshotCost: newAvgCost }
+                  : ri
+              ),
+            }));
+
+            movements.push(
+              addStockMovement(state, {
+                ingredientId: line.ingredientId,
+                type: 'IN',
+                reason: 'PURCHASE',
+                quantityDiff: line.quantity,
+                note: params.note || `Stock In ${documentNo}`,
+                referenceId: stockInId,
+              })
+            );
+
+            lines.push({
+              ingredientId: line.ingredientId,
+              ingredientName: ing.name,
+              quantity: line.quantity,
+              unitCost: line.unitCost,
+              lineTotal: line.quantity * line.unitCost,
+            });
+          }
+
+          if (!lines.length) return state;
+
+          created = true;
+          const totalAmount = lines.reduce((s, l) => s + l.lineTotal, 0);
+          const stockIn: StockInDocument = {
+            id: stockInId,
+            documentNo,
+            timestamp,
+            supplierId: resolvedSupplierId,
+            supplierName: resolvedSupplierName,
+            invoiceNo: params.invoiceNo,
+            purchaseOrderId: params.purchaseOrderId,
+            lines,
+            totalAmount,
+            note: params.note,
+            expenseRecorded: recordExpense,
+          };
+
+          if (params.purchaseOrderId) {
+            purchaseOrders = purchaseOrders.map(po =>
+              po.id === params.purchaseOrderId
+                ? { ...po, status: 'RECEIVED' as PurchaseOrderStatus, stockInId }
+                : po
+            );
+          }
+
+          const newExpenses = [...state.expenses];
+          if (recordExpense) {
+            newExpenses.push({
+              id: uuid.v4() as string,
+              timestamp,
+              category: 'INVENTORY',
+              totalAmount,
+              note: params.note,
+              stockInId,
+              documentNo,
+              supplierId: resolvedSupplierId,
+              supplierName: resolvedSupplierName,
+            });
+          }
+
+          return {
+            ingredients,
+            recipes,
+            movements,
+            purchaseOrders,
+            stockIns: [...state.stockIns, stockIn],
+            expenses: newExpenses,
+          };
         });
 
-        const updatedIngredients = state.ingredients.map(i =>
-          i.id === ingredientId
-            ? { ...i, stock: i.stock + quantity, costPerUnit: unitCost }
-            : i
-        );
+        return created ? stockInId : null;
+      },
 
-        let recipes = state.recipes;
-        if (ing.costPerUnit !== unitCost) {
-          recipes = state.recipes.map(r => ({
-            ...r,
-            ingredients: r.ingredients.map(ri =>
-              ri.ingredientId === ingredientId
-                ? { ...ri, snapshotCost: unitCost }
-                : ri
-            ),
-          }));
-        }
+      receiveStock: (params) => {
+        return get().createStockIn({
+          lines: [
+            {
+              ingredientId: params.ingredientId,
+              quantity: params.quantity,
+              unitCost: params.unitCost,
+            },
+          ],
+          supplierId: params.supplierId,
+          supplierName: params.supplierName,
+          invoiceNo: params.invoiceNo,
+          note: params.note,
+          recordExpense: params.recordExpense,
+        });
+      },
 
-        const newExpenses = [...state.expenses];
-        if (recordExpense) {
-          newExpenses.push({
-            id: uuid.v4() as string,
-            timestamp: new Date().toISOString(),
+      addSupplier: (supplier) =>
+        set(state => ({
+          suppliers: [...state.suppliers, { ...supplier, id: uuid.v4() as string }],
+        })),
+
+      updateSupplier: (id, updated) =>
+        set(state => ({
+          suppliers: state.suppliers.map(s => (s.id === id ? { ...s, ...updated } : s)),
+        })),
+
+      deleteSupplier: (id) => {
+        const { purchaseOrders, stockIns } = get();
+        const inUse =
+          purchaseOrders.some(po => po.supplierId === id) ||
+          stockIns.some(si => si.supplierId === id);
+        if (inUse) return false;
+        set(state => ({
+          suppliers: state.suppliers.filter(s => s.id !== id),
+        }));
+        return true;
+      },
+
+      addOperatingExpense: (params) =>
+        set(state => ({
+          expenses: [
+            ...state.expenses,
+            {
+              id: uuid.v4() as string,
+              timestamp: params.timestamp ?? new Date().toISOString(),
+              category: 'OPERATING',
+              title: params.title,
+              operatingType: params.operatingType,
+              totalAmount: params.totalAmount,
+              note: params.note,
+            },
+          ],
+        })),
+
+      nextStockOpnameDocumentNo: () => {
+        const { stockOpnames } = get();
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const todayCount =
+          stockOpnames.filter(s => s.documentNo.includes(date)).length + 1;
+        return `SO-${date}-${String(todayCount).padStart(3, '0')}`;
+      },
+
+      postStockOpname: (params) => {
+        const reason = params.reason?.trim();
+        if (!reason) return null;
+
+        const opnameId = uuid.v4() as string;
+        const documentNo = get().nextStockOpnameDocumentNo();
+        const timestamp = new Date().toISOString();
+        const movementNote = params.note?.trim()
+          ? `${reason} — ${params.note.trim()}`
+          : reason;
+
+        let created = false;
+
+        set(state => {
+          let ingredients = [...state.ingredients];
+          let movements = [...state.movements];
+          const lines: StockOpnameLine[] = [];
+
+          for (const line of params.lines) {
+            const ing = ingredients.find(i => i.id === line.ingredientId);
+            if (!ing) continue;
+
+            const systemQty = ing.stock;
+            const variance = line.countedQty - systemQty;
+            const unitCost = ing.costPerUnit;
+
+            if (variance !== 0) {
+              ingredients = ingredients.map(i =>
+                i.id === line.ingredientId ? { ...i, stock: line.countedQty } : i
+              );
+              movements.push(
+                addStockMovement(state, {
+                  ingredientId: line.ingredientId,
+                  type: variance > 0 ? 'IN' : 'OUT',
+                  reason: 'STOCK_OPNAME',
+                  quantityDiff: variance,
+                  note: movementNote || `Opname ${documentNo}`,
+                  referenceId: opnameId,
+                })
+              );
+            } else {
+              ingredients = ingredients.map(i =>
+                i.id === line.ingredientId ? { ...i, stock: line.countedQty } : i
+              );
+            }
+
+            lines.push({
+              ingredientId: line.ingredientId,
+              ingredientName: ing.name,
+              systemQty,
+              countedQty: line.countedQty,
+              variance,
+              unitCost,
+              varianceValue: variance * unitCost,
+            });
+          }
+
+          if (!lines.length) return state;
+
+          created = true;
+          const doc: StockOpnameDocument = {
+            id: opnameId,
+            documentNo,
+            timestamp,
+            reason,
+            lines,
+            note: params.note,
+          };
+
+          return {
+            ingredients,
+            movements,
+            stockOpnames: [...state.stockOpnames, doc],
+          };
+        });
+
+        return created ? opnameId : null;
+      },
+
+      nextPurchaseOrderDocumentNo: () => {
+        const { purchaseOrders } = get();
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const todayCount =
+          purchaseOrders.filter(p => p.documentNo.includes(date)).length + 1;
+        return `PO-${date}-${String(todayCount).padStart(3, '0')}`;
+      },
+
+      createPurchaseOrder: (params) => {
+        const poId = uuid.v4() as string;
+        const documentNo = get().nextPurchaseOrderDocumentNo();
+        const timestamp = new Date().toISOString();
+        const supplierFromMaster = params.supplierId
+          ? get().suppliers.find(s => s.id === params.supplierId)
+          : undefined;
+
+        set(state => {
+          const lines: PurchaseOrderLine[] = [];
+          for (const line of params.lines) {
+            const ing = state.ingredients.find(i => i.id === line.ingredientId);
+            if (!ing || line.quantity <= 0 || line.unitCost < 0) continue;
+            lines.push({
+              ingredientId: line.ingredientId,
+              ingredientName: ing.name,
+              quantity: line.quantity,
+              unitCost: line.unitCost,
+              lineTotal: line.quantity * line.unitCost,
+            });
+          }
+          if (!lines.length) return state;
+
+          const po: PurchaseOrder = {
+            id: poId,
+            documentNo,
+            timestamp,
+            supplierId: params.supplierId,
+            supplierName: supplierFromMaster?.name ?? params.supplierName,
+            status: 'DRAFT',
+            lines,
+            totalAmount: lines.reduce((s, l) => s + l.lineTotal, 0),
+            note: params.note,
+          };
+
+          return { purchaseOrders: [...state.purchaseOrders, po] };
+        });
+
+        return poId;
+      },
+
+      receivePurchaseOrder: (purchaseOrderId, recordExpense = true) => {
+        const po = get().purchaseOrders.find(p => p.id === purchaseOrderId);
+        if (!po || po.status !== 'DRAFT') return null;
+
+        return get().createStockIn({
+          lines: po.lines.map(l => ({
+            ingredientId: l.ingredientId,
+            quantity: l.quantity,
+            unitCost: l.unitCost,
+          })),
+          supplierId: po.supplierId,
+          supplierName: po.supplierName,
+          note: po.note,
+          recordExpense,
+          purchaseOrderId,
+        });
+      },
+
+      cancelPurchaseOrder: (purchaseOrderId) => {
+        const po = get().purchaseOrders.find(p => p.id === purchaseOrderId);
+        if (!po || po.status !== 'DRAFT') return false;
+        set(state => ({
+          purchaseOrders: state.purchaseOrders.map(p =>
+            p.id === purchaseOrderId
+              ? { ...p, status: 'CANCELED' as PurchaseOrderStatus }
+              : p
+          ),
+        }));
+        return true;
+      },
+
+      recordWaste: ({ ingredientId, quantity, note }) => {
+        if (quantity <= 0) return;
+        set(state => {
+          const ing = state.ingredients.find(i => i.id === ingredientId);
+          if (!ing || ing.stock < quantity) return state;
+
+          const movement = addStockMovement(state, {
             ingredientId,
-            ingredientName: ing.name,
-            quantity,
-            unitCost,
-            totalAmount: quantity * unitCost,
-            note,
+            type: 'OUT',
+            reason: 'WASTE',
+            quantityDiff: -quantity,
+            note: note || 'Waste / spoilage',
           });
-        }
 
-        return {
-          ingredients: updatedIngredients,
-          recipes,
-          movements: [...state.movements, movement],
-          expenses: newExpenses,
-        };
-      }),
+          return {
+            ingredients: state.ingredients.map(i =>
+              i.id === ingredientId ? { ...i, stock: i.stock - quantity } : i
+            ),
+            movements: [...state.movements, movement],
+          };
+        });
+      },
 
       // Categories
       addCategory: (name, color) => set((state) => ({
@@ -474,9 +1035,15 @@ export const usePosStore = create<PosState>()(
       updateProduct: (id, updated) => set((state) => ({
         products: state.products.map(p => p.id === id ? { ...p, ...updated } : p),
       })),
-      deleteProduct: (id) => set((state) => ({
-        products: state.products.filter(p => p.id !== id),
-      })),
+      deleteProduct: (id) => {
+        const product = get().products.find(p => p.id === id);
+        if (product?.imageUri) {
+          void removeProductImageFile(product.imageUri);
+        }
+        set(state => ({
+          products: state.products.filter(p => p.id !== id),
+        }));
+      },
 
       // Transactions
       addTransaction: (tx) => set((state) => {
@@ -514,7 +1081,7 @@ export const usePosStore = create<PosState>()(
               type: 'OUT',
               reason: 'SALE',
               quantityDiff: -totalQtyUsed,
-              note: `Tx: ${id}`
+              note: `Tx: ${id.substring(0, 8).toUpperCase()}`
             });
             newMovements.push(mvt);
           }
@@ -605,7 +1172,7 @@ export const usePosStore = create<PosState>()(
             type: 'IN',
             reason: 'VOID_ITEM',
             quantityDiff: totalQtyRestore,
-            note: `Void ${actualQtyToVoid}x ${item.name} (Tx: ${txId.substring(0, 6)}...)`
+            note: `Void ${actualQtyToVoid}x ${item.name} (Tx: ${txId.substring(0, 8).toUpperCase()}...)`
           });
           newMovements.push(mvt);
         }
@@ -704,17 +1271,192 @@ export const usePosStore = create<PosState>()(
           })
           .sort((a, b) => a.stock - b.stock); // most critical first
       },
+
+      addTableZone: (name) =>
+        set(state => {
+          const trimmed = name.trim();
+          if (!trimmed || state.tableZones.includes(trimmed)) return state;
+          return { tableZones: [...state.tableZones, trimmed] };
+        }),
+
+      removeTableZone: (name) =>
+        set(state => ({
+          tableZones: state.tableZones.filter(z => z !== name),
+        })),
+
+      addDiningTable: (table) =>
+        set(state => ({
+          diningTables: [
+            ...state.diningTables,
+            {
+              ...table,
+              id: uuid.v4() as string,
+              sortOrder: state.diningTables.length,
+            },
+          ],
+        })),
+
+      addDiningTablesBulk: ({ baseName, count, zone }) => {
+        const base = baseName.trim();
+        const qty = Math.min(Math.max(Math.floor(count), 1), 99);
+        if (!base || !zone.trim()) return 0;
+
+        const bulkName = (index: number) => {
+          if (base.length <= 3 && !/\s/.test(base)) return `${base}${index}`;
+          return `${base} ${index}`;
+        };
+
+        set(state => {
+          const startOrder = state.diningTables.length;
+          const newTables = Array.from({ length: qty }, (_, i) => ({
+            id: uuid.v4() as string,
+            name: bulkName(i + 1),
+            zone: zone.trim(),
+            sortOrder: startOrder + i,
+          }));
+          return { diningTables: [...state.diningTables, ...newTables] };
+        });
+        return qty;
+      },
+
+      updateDiningTable: (id, updates) =>
+        set(state => ({
+          diningTables: state.diningTables.map(t =>
+            t.id === id ? { ...t, ...updates } : t
+          ),
+        })),
+
+      deleteDiningTable: (id) =>
+        set(state => ({
+          diningTables: state.diningTables.filter(t => t.id !== id),
+          tableOrders: state.tableOrders.filter(o => o.tableId !== id),
+        })),
+
+      getTableOrderForTable: (tableId) => {
+        const { tableOrders } = get();
+        return tableOrders.find(o => o.tableId === tableId);
+      },
+
+      nextTableOrderDocumentNo: () => {
+        const { tableOrders } = get();
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const todayCount =
+          tableOrders.filter(o => o.documentNo.includes(date)).length + 1;
+        return `OR-${date}-${String(todayCount).padStart(3, '0')}`;
+      },
+
+      upsertOpenTableOrder: (params) => {
+        const now = new Date().toISOString();
+        const paid = get().tableOrders.find(
+          o => o.tableId === params.tableId && o.status === 'PAID'
+        );
+        if (paid) return paid.id;
+
+        const existing = get().tableOrders.find(
+          o => o.tableId === params.tableId && o.status === 'OPEN'
+        );
+        if (existing) {
+          const lines = params.mergeLines
+            ? mergeTableOrderLines(existing.lines, params.lines)
+            : params.lines;
+          set(state => ({
+            tableOrders: state.tableOrders.map(o =>
+              o.id === existing.id
+                ? {
+                    ...o,
+                    lines,
+                    orderNote:
+                      params.orderNote !== undefined
+                        ? params.orderNote
+                        : o.orderNote,
+                    updatedAt: now,
+                  }
+                : o
+            ),
+          }));
+          return existing.id;
+        }
+
+        const orderId = uuid.v4() as string;
+        const documentNo = get().nextTableOrderDocumentNo();
+        const order: TableOrder = {
+          id: orderId,
+          tableId: params.tableId,
+          documentNo,
+          createdAt: now,
+          updatedAt: now,
+          status: 'OPEN',
+          lines: params.lines,
+          orderNote: params.orderNote,
+        };
+        set(state => ({
+          tableOrders: [...state.tableOrders, order],
+        }));
+        return orderId;
+      },
+
+      markTableOrderPaid: (tableOrderId, transactionId) =>
+        set(state => ({
+          tableOrders: state.tableOrders.map(o =>
+            o.id === tableOrderId
+              ? {
+                  ...o,
+                  status: 'PAID' as TableOrderStatus,
+                  transactionId,
+                  updatedAt: new Date().toISOString(),
+                }
+              : o
+          ),
+        })),
+
+      clearTable: (tableId) =>
+        set(state => ({
+          tableOrders: state.tableOrders.filter(o => o.tableId !== tableId),
+        })),
+
+      resetAllData: async () => {
+        const logoUri = get().storeSettings.logoUri;
+        await usePosStore.persist.clearStorage();
+        set({
+          ingredients: [],
+          recipes: [],
+          categories: [],
+          products: [],
+          transactions: [],
+          movements: [],
+          modifiers: [],
+          expenses: [],
+          stockIns: [],
+          suppliers: [],
+          purchaseOrders: [],
+          stockOpnames: [],
+          tableZones: [...DEFAULT_TABLE_ZONES],
+          diningTables: [],
+          tableOrders: [],
+          storeSettings: { ...DEFAULT_STORE_SETTINGS },
+          connectedPrinter: null,
+        });
+        const { removeStoreLogoFile } = await import('../utils/storeLogo');
+        await removeStoreLogoFile(logoUri);
+      },
     }),
     {
       name: 'pos-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 4,
+      version: 7,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as {
           categories?: { id: string; name: string; color?: string }[];
           storeSettings?: Partial<StoreSettings>;
           modifiers?: ProductModifier[];
           expenses?: Expense[];
+          stockIns?: StockInDocument[];
+          suppliers?: Supplier[];
+          purchaseOrders?: PurchaseOrder[];
+          stockOpnames?: StockOpnameDocument[];
+          tableZones?: string[];
+          diningTables?: DiningTable[];
+          tableOrders?: TableOrder[];
         };
         if (version < 2 && state?.categories) {
           state.categories = state.categories.map((c, i) => ({
@@ -728,7 +1470,28 @@ export const usePosStore = create<PosState>()(
           }
         }
         if (!state.modifiers) state.modifiers = [];
-        if (!state.expenses) state.expenses = [];
+        if (!state.stockIns) state.stockIns = [];
+        if (!state.suppliers) state.suppliers = [];
+        if (!state.purchaseOrders) state.purchaseOrders = [];
+        if (!state.stockOpnames) state.stockOpnames = [];
+        if (!state.tableZones?.length) state.tableZones = [...DEFAULT_TABLE_ZONES];
+        if (!state.diningTables) state.diningTables = [];
+        if (!state.tableOrders) state.tableOrders = [];
+        if (state.expenses) {
+          state.expenses = state.expenses.map(e => ({
+            ...e,
+            category: e.category ?? 'INVENTORY',
+            totalAmount: e.totalAmount ?? 0,
+          }));
+        } else {
+          state.expenses = [];
+        }
+        if (state.stockOpnames) {
+          state.stockOpnames = state.stockOpnames.map(o => ({
+            ...o,
+            reason: o.reason ?? 'Stock count',
+          }));
+        }
         return state as never;
       },
     }

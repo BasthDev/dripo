@@ -1,3 +1,8 @@
+# Phase 2 — Purchasing (simplified)
+- One screen: **Purchases** (Orders + Received tabs) — receive PO auto-saves to Received
+- **Inventory** → prominent **Add new ingredient**; tap edit, long-press quick receive
+- Drawer: single **Purchasing** item; see `docs/INVENTORY-FLOW.md`
+
 #  need fix
 - Priter scanner if error should shown as popup, and also need to shwon this note udner it "Make Sure Bluetooth & Gps/location is active/On"
 

@@ -20,4 +20,7 @@ export { default as Popup } from './Popup';
 export { default as Header } from './Header';
 export type { HeaderVariant } from './Header';
 
+export { default as DocumentBadge } from './DocumentBadge';
+export type { DocumentBadgeVariant } from './DocumentBadge';
+
 export { Colors, Spacing, Radius, Typography, Shadow } from './theme';

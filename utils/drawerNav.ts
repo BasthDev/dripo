@@ -21,6 +21,17 @@ export function isReportsActive(pathname: string): boolean {
   return pathname === '/reports' || pathname.startsWith('/reports/');
 }
 
+export function isOrdersActive(pathname: string): boolean {
+  return pathname.includes('/orders');
+}
+
+export function isProcurementActive(pathname: string): boolean {
+  return (
+    pathname.includes('/procurement') ||
+    pathname.includes('/suppliers')
+  );
+}
+
 export function isRouteActive(pathname: string, segment: string): boolean {
   if (segment === 'pos') return isPosRouteActive(pathname);
   if (segment === 'dashboard') return isDashboardActive(pathname);

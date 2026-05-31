@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Switch, Text, Alert } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Header, InputField, Button, Dropdown, DropdownOption, Colors, Spacing, Typography, Radius } from '../../components/ui';
-import { usePosStore, IngredientType } from '../../store/usePosStore';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { Button, Colors, Dropdown, DropdownOption, Header, InputField, Spacing } from '../../components/ui';
+import { useAppPopup } from '../../hooks/useAppPopup';
+import { IngredientType, usePosStore } from '../../store/usePosStore';
 
 const TYPE_OPTIONS: DropdownOption[] = [
   { label: 'Weight (Grams)', value: 'WEIGHT', icon: 'scale-outline' },
@@ -12,6 +13,7 @@ const TYPE_OPTIONS: DropdownOption[] = [
 
 export default function AddIngredientScreen() {
   const router = useRouter();
+  const { showConfirm, showMessage, AppPopup } = useAppPopup();
   const { id } = useLocalSearchParams<{ id?: string }>();
   
   const ingredients = usePosStore((state) => state.ingredients);
@@ -76,35 +78,39 @@ export default function AddIngredientScreen() {
 
   const unitHelper = type === 'WEIGHT' ? 'per gram' : type === 'VOLUME' ? 'per ml' : type === 'QUANTITY' ? 'per piece' : 'per unit';
 
+  const handleDelete = () => {
+    if (!id) return;
+    if (isIngredientInUse(id)) {
+      const count = recipes.filter(r =>
+        r.ingredients.some(ri => ri.ingredientId === id)
+      ).length;
+      showMessage({
+        title: 'Cannot Delete',
+        description: `This ingredient is used in ${count} recipe(s). Remove it from those recipes first.`,
+        icon: 'alert-circle-outline',
+        iconColor: Colors.error,
+      });
+      return;
+    }
+    showConfirm({
+      title: 'Delete Ingredient',
+      description: 'Are you sure?',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => {
+        deleteIngredient(id);
+        router.back();
+      },
+    });
+  };
+
   return (
     <View style={styles.container}>
       <Header
         title={id ? "Edit Ingredient" : "Add Ingredient"}
         onBack={() => router.back()}
         actions={id ? [{
-          icon: 'trash-outline', color: Colors.error, onPress: () => {
-            if (isIngredientInUse(id)) {
-              const count = recipes.filter(r =>
-                r.ingredients.some(ri => ri.ingredientId === id)
-              ).length;
-              Alert.alert(
-                'Cannot Delete',
-                `This ingredient is used in ${count} recipe(s). Remove it from those recipes first.`
-              );
-              return;
-            }
-            Alert.alert('Delete Ingredient', 'Are you sure?', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: () => {
-                  deleteIngredient(id);
-                  router.back();
-                },
-              },
-            ]);
-          }
+          icon: 'trash-outline', color: Colors.error, onPress: handleDelete
         }] : undefined}
       />
       <ScrollView contentContainerStyle={styles.content}>
@@ -157,6 +163,7 @@ export default function AddIngredientScreen() {
           style={styles.saveBtn}
         />
       </ScrollView>
+      <AppPopup />
     </View>
   );
 }

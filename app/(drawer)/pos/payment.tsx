@@ -11,9 +11,6 @@ import {
   View,
 } from 'react-native';
 import uuid from 'react-native-uuid';
-import PaymentSuccessView, {
-  type PaymentSuccessData,
-} from '../../../components/pos/PaymentSuccessView';
 import {
   Button,
   Colors,
@@ -40,8 +37,14 @@ export default function PaymentScreen() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
 
-  const { getTotal, clearCart, items, orderNote, setOrderNote, refreshFromStore } =
-    useCartStore();
+  const {
+    getTotal,
+    items,
+    orderNote,
+    setOrderNote,
+    refreshFromStore,
+    activeTableId,
+  } = useCartStore();
 
   useEffect(() => {
     refreshFromStore();
@@ -52,10 +55,6 @@ export default function PaymentScreen() {
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [cashGiven, setCashGiven] = useState('');
   const [localOrderNote, setLocalOrderNote] = useState(orderNote);
-
-  const [isPaid, setIsPaid] = useState(false);
-
-  const [successData, setSuccessData] = useState<PaymentSuccessData | null>(null);
 
   const total = getTotal();
   const cashParsed = parseFloat(cashGiven) || 0;
@@ -70,6 +69,7 @@ export default function PaymentScreen() {
   const handleConfirm = async () => {
     if (!canPay) return;
 
+    const wasTablePayment = !!activeTableId;
     const txId = uuid.v4() as string;
     const timestamp = new Date().toISOString();
 
@@ -137,6 +137,8 @@ export default function PaymentScreen() {
 
     addTransaction(tx);
 
+    const tableIdToClear = wasTablePayment ? activeTableId : null;
+
     const { connectedPrinter, storeSettings } = usePosStore.getState();
 
     if (connectedPrinter) {
@@ -154,19 +156,21 @@ export default function PaymentScreen() {
       0,
     );
 
-    setSuccessData({
-      txId,
-      timestamp,
-      total,
-      paidAmount: method === 'CASH' ? cashParsed : total,
-      change: finalChange,
-      itemsCount: finalItemsCount,
-      method,
-      orderNote: trimmedOrderNote || undefined,
+    router.replace({
+      pathname: '/pos/success',
+      params: {
+        txId,
+        timestamp,
+        total: String(total),
+        paidAmount: String(method === 'CASH' ? cashParsed : total),
+        change: String(finalChange),
+        itemsCount: String(finalItemsCount),
+        method,
+        orderNote: trimmedOrderNote || '',
+        returnTo: wasTablePayment ? '/orders' : '/pos',
+        ...(tableIdToClear ? { clearTableId: tableIdToClear } : {}),
+      },
     });
-
-    setIsPaid(true);
-    clearCart();
   };
 
   const renderCartSummary = () => {
@@ -295,17 +299,6 @@ export default function PaymentScreen() {
       </View>
     );
   };
-
-  if (isPaid && successData) {
-    return (
-      <View style={styles.container}>
-        <PaymentSuccessView
-          data={successData}
-          onDone={() => router.replace('/pos')}
-        />
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>

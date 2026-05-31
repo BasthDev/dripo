@@ -186,10 +186,10 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionItem}
-              onPress={() => router.push({ pathname: '/reports/low-stock' })}
+              onPress={() => router.push('/procurement/stock-opname')}
             >
               <Ionicons name="add-circle-outline" size={22} color={Colors.primary} />
-              <Text style={styles.actionText}>Update Stock</Text>
+              <Text style={styles.actionText}>Stock Opname</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.actionRow}>

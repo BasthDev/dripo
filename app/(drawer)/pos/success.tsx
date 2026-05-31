@@ -6,6 +6,7 @@ import PaymentSuccessView, {
 } from '../../../components/pos/PaymentSuccessView';
 import { Colors } from '../../../components/ui';
 import { useCartStore } from '../../../store/useCartStore';
+import { usePosStore } from '../../../store/usePosStore';
 
 export default function SuccessScreen() {
   const router = useRouter();
@@ -19,6 +20,8 @@ export default function SuccessScreen() {
     txId = '',
     timestamp = new Date().toISOString(),
     orderNote = '',
+    returnTo = '/pos',
+    clearTableId = '',
   } = useLocalSearchParams<{
     total?: string;
     paidAmount?: string;
@@ -28,11 +31,16 @@ export default function SuccessScreen() {
     txId?: string;
     timestamp?: string;
     orderNote?: string;
+    returnTo?: string;
+    clearTableId?: string;
   }>();
 
   useEffect(() => {
+    if (clearTableId) {
+      usePosStore.getState().clearTable(clearTableId);
+    }
     clearCart();
-  }, [clearCart]);
+  }, [clearCart, clearTableId]);
 
   const data: PaymentSuccessData = {
     txId: txId || 'unknown',
@@ -49,7 +57,7 @@ export default function SuccessScreen() {
     <View style={styles.container}>
       <PaymentSuccessView
         data={data}
-        onDone={() => router.replace('/pos')}
+        onDone={() => router.replace(returnTo as '/pos' | '/orders')}
       />
     </View>
   );

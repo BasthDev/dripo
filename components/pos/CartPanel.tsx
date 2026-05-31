@@ -168,17 +168,18 @@ export default function CartPanel({ navFrom = 'pos', tableSaleMode }: CartPanelP
 
                 <View style={styles.qtyControls}>
                   <TouchableOpacity
-                    style={styles.qtyBtn}
-                    onPress={() =>
-                      item.quantity > 1
-                        ? updateQuantity(item.cartItemId, item.quantity - 1)
-                        : removeItem(item.cartItemId)
-                    }
+                    style={[styles.qtyBtn, item.quantity <= 1 && styles.qtyBtnDisabled]}
+                    onPress={() => {
+                      if (item.quantity > 1) {
+                        updateQuantity(item.cartItemId, item.quantity - 1);
+                      }
+                    }}
+                    disabled={item.quantity <= 1}
                   >
                     <Ionicons
-                      name={item.quantity === 1 ? 'trash-outline' : 'remove'}
+                      name="remove"
                       size={16}
-                      color={item.quantity === 1 ? Colors.error : Colors.text}
+                      color={item.quantity > 1 ? Colors.text : Colors.textMuted}
                     />
                   </TouchableOpacity>
 
@@ -200,6 +201,15 @@ export default function CartPanel({ navFrom = 'pos', tableSaleMode }: CartPanelP
                     />
                   </TouchableOpacity>
                 </View>
+
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={() => removeItem(item.cartItemId)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Remove item"
+                >
+                  <Ionicons name="trash-outline" size={20} color={Colors.error} />
+                </TouchableOpacity>
               </View>
             );
           }}
@@ -358,6 +368,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '700',
     fontSize: Typography.md,
+  },
+  deleteBtn: {
+    padding: Spacing.sm,
+    marginLeft: Spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   footer: {
     padding: Spacing.lg,

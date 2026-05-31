@@ -76,9 +76,20 @@ export function navigateToSelectTable(router: Pick<TableOrderRouter, 'push'>) {
   });
 }
 
-export function leaveTableSale(router: Pick<TableOrderRouter, 'replace' | 'back'>, from?: string) {
+export function leaveTableSale(
+  router: Pick<TableOrderRouter, 'replace' | 'back'>,
+  from?: string,
+  tableId?: string
+) {
   if (from === 'orders') {
-    router.replace(TABLE_ORDER_ROUTES.tables);
+    if (tableId) {
+      router.replace({
+        pathname: '/orders/[tableId]',
+        params: { tableId },
+      });
+    } else {
+      router.replace(TABLE_ORDER_ROUTES.tables);
+    }
   } else {
     router.back();
   }
@@ -97,22 +108,6 @@ export function replaceAfterTableOrderSave(
     return;
   }
   router.replace(TABLE_ORDER_ROUTES.tables);
-}
-
-/** After saving new items / new table order — return to sale screen. */
-export function replaceAfterTableOrderSale(
-  router: Pick<TableOrderRouter, 'replace'>,
-  opts?: { tableId?: string; navFrom?: TableOrderNavFrom; saleMode?: TableSaleMode }
-) {
-  const { tableId, navFrom = 'orders', saleMode = 'add' } = opts ?? {};
-  if (tableId) {
-    router.replace({
-      pathname: TABLE_ORDER_ROUTES.pos,
-      params: { tableId, from: navFrom, mode: saleMode },
-    });
-    return;
-  }
-  router.replace(TABLE_ORDER_ROUTES.pos);
 }
 
 /** Save lines to table, auto-print, then open success screen (Majoo-style). */

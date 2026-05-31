@@ -57,8 +57,8 @@ export default function POSScreen() {
   const confirmLeaveTableSale = useCallback(() => {
     clearCart();
     setLeavePopupVisible(false);
-    leaveTableSale(router, from);
-  }, [clearCart, router, from]);
+    leaveTableSale(router, from, tableId);
+  }, [clearCart, router, from, tableId]);
 
   const [leavePopupVisible, setLeavePopupVisible] = useState(false);
   const [searchQ, setSearchQ] = useState('');

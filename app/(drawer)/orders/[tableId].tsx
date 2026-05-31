@@ -162,52 +162,34 @@ export default function TableOrderDetailScreen() {
 
   const actionPanel = (
     <View style={[styles.actionsPanel, !isWide && styles.actionsPanelStacked]}>
-      <View style={styles.actionsGrid}>
-        <View style={styles.actionsGridRow}>
-          <View style={styles.gridCell}>
-            <Button
-              label="Add item"
-              variant="primary"
-              iconLeft="add-circle-outline"
-              size="sm"
-              onPress={() => navigateToAddTableItems(router, tableId)}
-              style={styles.gridBtn}
-            />
-          </View>
-          <View style={styles.gridCell}>
-            <Button
-              label="Edit items"
-              variant="outline"
-              iconLeft="create-outline"
-              size="sm"
-              onPress={() => navigateToEditTable(router, tableId)}
-              style={styles.gridBtn}
-            />
-          </View>
-        </View>
-        <View style={styles.actionsGridRow}>
-          <View style={styles.gridCell}>
-            <Button
-              label="Payment"
-              variant="success"
-              iconLeft="card-outline"
-              size="sm"
-              onPress={handlePayment}
-              style={styles.gridBtn}
-            />
-          </View>
-          <View style={styles.gridCell}>
-            <Button
-              label="Reprint"
-              variant="outline"
-              iconLeft="print-outline"
-              size="sm"
-              onPress={() => void handleReprint()}
-              style={styles.gridBtn}
-            />
-          </View>
-        </View>
-      </View>
+      <Button
+        label="Add item"
+        variant="primary"
+        iconLeft="add-circle-outline"
+        fullWidth
+        onPress={() => navigateToAddTableItems(router, tableId)}
+      />
+      <Button
+        label="Edit items"
+        variant="outline"
+        iconLeft="create-outline"
+        fullWidth
+        onPress={() => navigateToEditTable(router, tableId)}
+      />
+      <Button
+        label="Payment"
+        variant="success"
+        iconLeft="card-outline"
+        fullWidth
+        onPress={handlePayment}
+      />
+      <Button
+        label="Reprint"
+        variant="outline"
+        iconLeft="print-outline"
+        fullWidth
+        onPress={() => void handleReprint()}
+      />
     </View>
   );
 
@@ -292,8 +274,10 @@ const styles = StyleSheet.create({
   },
   noteText: { color: Colors.text, fontSize: Typography.sm },
   actionsPanel: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    flex: 1,
+    maxWidth: 320,
+    justifyContent: 'flex-end',
+    gap: Spacing.md,
     padding: Spacing.lg,
     backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
@@ -301,25 +285,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.surfaceBorder,
   },
   actionsPanelStacked: {
-    alignSelf: 'stretch',
+    flex: 0,
+    maxWidth: '100%',
+    justifyContent: 'flex-start',
     paddingVertical: Spacing.md,
-  },
-  actionsGrid: {
-    gap: Spacing.md,
-  },
-  actionsGridRow: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-  },
-  gridCell: {
-    width: 200,
-    height: 100,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  gridBtn: {
-    width: 200,
-    height: 100,
   },
   actionsScroll: { flexGrow: 0 },
 });

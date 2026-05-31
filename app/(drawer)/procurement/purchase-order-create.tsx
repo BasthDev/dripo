@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import IngredientProcurementLineFields from '../../../components/ingredients/IngredientProcurementLineFields';
 import {
   Button,
   Colors,
@@ -15,14 +16,25 @@ import {
   Typography,
 } from '../../../components/ui';
 import { usePosStore } from '../../../store/usePosStore';
-import { ingredientUnit } from '../../../utils/ingredientUnits';
+import {
+  defaultIngredientLineInput,
+  resolveIngredientLine,
+  type IngredientLineInputState,
+} from '../../../utils/ingredientCost';
 
 type LineDraft = {
   key: string;
   ingredientId: string;
-  quantity: string;
-  unitCost: string;
+  input: IngredientLineInputState;
 };
+
+function newLineDraft(): LineDraft {
+  return {
+    key: String(Date.now()),
+    ingredientId: '',
+    input: defaultIngredientLineInput({ type: 'QUANTITY', costPerUnit: 0 }),
+  };
+}
 
 export default function PurchaseOrderCreateScreen() {
   const router = useRouter();
@@ -32,9 +44,7 @@ export default function PurchaseOrderCreateScreen() {
 
   const [supplierId, setSupplierId] = useState('');
   const [note, setNote] = useState('');
-  const [lines, setLines] = useState<LineDraft[]>([
-    { key: '1', ingredientId: '', quantity: '', unitCost: '' },
-  ]);
+  const [lines, setLines] = useState<LineDraft[]>([newLineDraft()]);
   const [documentNo] = useState(() =>
     usePosStore.getState().nextPurchaseOrderDocumentNo()
   );
@@ -53,20 +63,19 @@ export default function PurchaseOrderCreateScreen() {
   const parsedLines = useMemo(
     () =>
       lines
-        .map(l => ({
-          ingredientId: l.ingredientId,
-          quantity: parseFloat(l.quantity),
-          unitCost: parseFloat(l.unitCost),
-        }))
-        .filter(
-          l =>
-            l.ingredientId &&
-            !isNaN(l.quantity) &&
-            l.quantity > 0 &&
-            !isNaN(l.unitCost) &&
-            l.unitCost >= 0
-        ),
-    [lines]
+        .map(l => {
+          const ing = ingredients.find(i => i.id === l.ingredientId);
+          if (!ing) return null;
+          const resolved = resolveIngredientLine(l.input, ing.type);
+          if (!resolved) return null;
+          return {
+            ingredientId: l.ingredientId,
+            quantity: resolved.baseQty,
+            unitCost: resolved.unitCost,
+          };
+        })
+        .filter(Boolean) as { ingredientId: string; quantity: number; unitCost: number }[],
+    [lines, ingredients]
   );
 
   const total = parsedLines.reduce((s, l) => s + l.quantity * l.unitCost, 0);
@@ -85,6 +94,10 @@ export default function PurchaseOrderCreateScreen() {
     <View style={styles.container}>
       <Header title="New Purchase Order" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.intro}>
+          Order in kg, L, or pcs. Enter purchase price as a package (e.g. 1 kg @ Rp 150,000).
+        </Text>
+
         <DocumentBadge label="PO No." documentNo={documentNo} variant="po" />
 
         <Dropdown
@@ -97,7 +110,6 @@ export default function PurchaseOrderCreateScreen() {
 
         {lines.map((line, index) => {
           const ing = ingredients.find(i => i.id === line.ingredientId);
-          const unit = ing ? ingredientUnit(ing.type) : '';
           return (
             <View key={line.key} style={styles.lineCard}>
               <View style={styles.lineHeader}>
@@ -114,40 +126,35 @@ export default function PurchaseOrderCreateScreen() {
                 label="Ingredient"
                 options={ingredientOptions}
                 value={line.ingredientId}
-                onChange={opt =>
+                onChange={opt => {
+                  const selected = ingredients.find(i => i.id === opt.value);
                   setLines(prev =>
                     prev.map(l =>
-                      l.key === line.key ? { ...l, ingredientId: opt.value } : l
+                      l.key === line.key
+                        ? {
+                            ...l,
+                            ingredientId: opt.value,
+                            input: selected
+                              ? defaultIngredientLineInput(selected)
+                              : l.input,
+                          }
+                        : l
                     )
-                  )
-                }
+                  );
+                }}
                 placeholder="Select..."
               />
               {ing ? (
-                <Text style={styles.unitHint}>
-                  Unit: {unit} ({ing.type === 'WEIGHT' ? 'weight' : ing.type === 'VOLUME' ? 'volume' : 'pieces'})
-                </Text>
+                <IngredientProcurementLineFields
+                  ingredient={ing}
+                  value={line.input}
+                  onChange={input =>
+                    setLines(prev =>
+                      prev.map(l => (l.key === line.key ? { ...l, input } : l))
+                    )
+                  }
+                />
               ) : null}
-              <InputField
-                label={unit ? `Quantity (${unit})` : 'Quantity'}
-                keyboardType="numeric"
-                value={line.quantity}
-                onChangeText={v =>
-                  setLines(prev =>
-                    prev.map(l => (l.key === line.key ? { ...l, quantity: v } : l))
-                  )
-                }
-              />
-              <InputField
-                label={unit ? `Price per ${unit} (Rp)` : 'Unit cost (Rp)'}
-                keyboardType="numeric"
-                value={line.unitCost}
-                onChangeText={v =>
-                  setLines(prev =>
-                    prev.map(l => (l.key === line.key ? { ...l, unitCost: v } : l))
-                  )
-                }
-              />
             </View>
           );
         })}
@@ -156,12 +163,7 @@ export default function PurchaseOrderCreateScreen() {
           label="Add line"
           variant="outline"
           iconLeft="add"
-          onPress={() =>
-            setLines(prev => [
-              ...prev,
-              { key: String(Date.now()), ingredientId: '', quantity: '', unitCost: '' },
-            ])
-          }
+          onPress={() => setLines(prev => [...prev, newLineDraft()])}
         />
 
         <InputField label="Note" value={note} onChangeText={setNote} />
@@ -184,6 +186,7 @@ export default function PurchaseOrderCreateScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: Spacing.lg, gap: Spacing.lg, paddingBottom: 48 },
+  intro: { color: Colors.textSecondary, fontSize: Typography.sm, lineHeight: 20 },
   lineCard: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
@@ -194,6 +197,5 @@ const styles = StyleSheet.create({
   },
   lineHeader: { flexDirection: 'row', justifyContent: 'space-between' },
   lineTitle: { fontWeight: '700', color: Colors.text },
-  unitHint: { color: Colors.textMuted, fontSize: Typography.xs, marginBottom: Spacing.xs },
   total: { color: Colors.primary, fontWeight: '800', textAlign: 'center', fontSize: Typography.lg },
 });

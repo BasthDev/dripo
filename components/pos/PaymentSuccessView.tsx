@@ -255,6 +255,76 @@ function SuccessHero({
   );
 }
 
+/** Embedded success UI for payment screen left panel (split layout). */
+export function PaymentSuccessPanel({
+  data,
+  onDone,
+  doneLabel = 'Back to POS',
+  onPrint,
+  printLabel,
+}: Props) {
+  const total = Number(data.total) || 0;
+  const paidAmount = data.paidAmount != null ? Number(data.paidAmount) : total;
+  const change = Number(data.change) || 0;
+  const itemsCount = Number(data.itemsCount) || 0;
+
+  const paidAt = new Date(data.timestamp || Date.now());
+  const timeStr = paidAt.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const dateStr = paidAt.toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  return (
+    <View style={styles.embeddedRoot}>
+      <ScrollView
+        style={styles.embeddedScroll}
+        contentContainerStyle={styles.embeddedScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.embeddedHero}>
+          <LottieView
+            source={require('../../assets/lottie/Success.json')}
+            autoPlay
+            loop={false}
+            style={{ width: 130, height: 130 }}
+          />
+          <Text style={styles.title}>Payment Successful</Text>
+          <Text style={styles.subtitle}>
+            Successfully paid Rp {total.toLocaleString()}
+          </Text>
+        </View>
+        <DetailsBlock
+          data={data}
+          total={total}
+          paidAmount={paidAmount}
+          change={change}
+          itemsCount={itemsCount}
+          timeStr={timeStr}
+          dateStr={dateStr}
+        />
+      </ScrollView>
+      <View style={styles.embeddedFooter}>
+        {onPrint ? (
+          <Button
+            label={printLabel ?? 'Print receipt'}
+            variant="outline"
+            fullWidth
+            iconLeft="print-outline"
+            onPress={onPrint}
+          />
+        ) : null}
+        <Button label={doneLabel} variant="primary" fullWidth onPress={onDone} />
+      </View>
+    </View>
+  );
+}
+
 export default function PaymentSuccessView({
   data,
   onDone,
@@ -612,5 +682,29 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: Colors.surfaceBorder,
+  },
+  embeddedRoot: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  embeddedScroll: {
+    flex: 1,
+  },
+  embeddedScrollContent: {
+    padding: Spacing.lg,
+    paddingBottom: Spacing.xl,
+    gap: Spacing.lg,
+  },
+  embeddedHero: {
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+  },
+  embeddedFooter: {
+    padding: Spacing.lg,
+    gap: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.surfaceBorder,
+    backgroundColor: Colors.background,
   },
 });

@@ -9,8 +9,8 @@ import { Colors } from '../../../components/ui';
 import { getCartLineUnitPrice, useCartStore } from '../../../store/useCartStore';
 import type { TableOrderLine } from '../../../store/usePosStore';
 import { usePosStore } from '../../../store/usePosStore';
-import { printReceipt } from '../../../utils/bluetoothPrinter';
-import { buildTableOrderReceiptTx, tableLinesToCart } from '../../../utils/tableOrder';
+import { dispatchTableKitchenReprint, hasAnyPrinterConfigured } from '../../../utils/printerRouting';
+import { tableLinesToCart } from '../../../utils/tableOrder';
 import { TABLE_ORDER_ROUTES, replaceAfterTableOrderSave } from '../../../utils/tableOrderFlow';
 
 function parseSavedLines(raw: string | undefined): TableOrderLine[] | null {
@@ -41,8 +41,6 @@ export default function TableOrderSuccessScreen() {
   const products = usePosStore(s => s.products);
   const categories = usePosStore(s => s.categories);
   const modifiers = usePosStore(s => s.modifiers);
-  const storeSettings = usePosStore(s => s.storeSettings);
-  const connectedPrinter = usePosStore(s => s.connectedPrinter);
 
   const savedLines = useMemo(
     () => parseSavedLines(savedLinesParam),
@@ -94,21 +92,15 @@ export default function TableOrderSuccessScreen() {
     [order, orderId, table, total, itemsCount, lineItems]
   );
 
-  const handlePrint = useCallback(async () => {
-    if (!order || !table || !connectedPrinter || !displayItems.length) return;
-    const receiptTx = buildTableOrderReceiptTx(displayItems, categories, modifiers, {
-      orderId: order.id,
-      documentNo: order.documentNo,
+  const handlePrint = useCallback(() => {
+    if (!order || !table || !hasAnyPrinterConfigured() || !displayItems.length) return;
+    dispatchTableKitchenReprint(displayItems, {
       tableName: table.name,
       zone: table.zone,
+      documentNo: order.documentNo,
       orderNote: order.orderNote,
     });
-    try {
-      await printReceipt(receiptTx, storeSettings);
-    } catch (e) {
-      console.error('[TableOrderSuccess] Print error:', e);
-    }
-  }, [order, table, connectedPrinter, displayItems, categories, modifiers, storeSettings]);
+  }, [order, table, displayItems]);
 
   const handleDone = useCallback(() => {
     clearCart();
@@ -147,7 +139,7 @@ export default function TableOrderSuccessScreen() {
         data={data}
         onDone={handleDone}
         doneLabel="Back to table"
-        onPrint={connectedPrinter ? handlePrint : undefined}
+        onPrint={hasAnyPrinterConfigured() ? handlePrint : undefined}
       />
     </View>
   );

@@ -13,7 +13,7 @@ import {
 } from '../../../components/ui';
 import { useAppPopup } from '../../../hooks/useAppPopup';
 import { usePosStore } from '../../../store/usePosStore';
-import { formatQtyWithUnit, ingredientUnit } from '../../../utils/ingredientUnits';
+import { formatCostPerUnit, formatRecipeQuantity } from '../../../utils/ingredientCost';
 
 type Tab = 'received' | 'orders';
 
@@ -120,8 +120,10 @@ export default function PurchasesScreen() {
                 item.lines.length === 1
                   ? (() => {
                       const ing = ingById(item.lines[0].ingredientId);
-                      const u = ing ? ingredientUnit(ing.type) : '';
-                      return `${item.lines[0].ingredientName}: ${item.lines[0].quantity}${u ? ` ${u}` : ''}`;
+                      const qty = ing
+                        ? formatRecipeQuantity(item.lines[0].quantity, ing.type)
+                        : String(item.lines[0].quantity);
+                      return `${item.lines[0].ingredientName}: ${qty}`;
                     })()
                   : `${item.lines.length} items`;
 
@@ -210,12 +212,14 @@ export default function PurchasesScreen() {
                       const ing = ingredients.find(
                         i => i.id === line.ingredientId
                       );
-                      const unit = ing ? ingredientUnit(ing.type) : 'unit';
                       return (
                         <Text key={line.ingredientId} style={styles.poLine}>
                           {line.ingredientName}:{' '}
-                          {formatQtyWithUnit(line.quantity, ing?.type ?? 'QUANTITY')}
-                          {' × '}Rp {line.unitCost.toLocaleString()}/{unit}
+                          {formatRecipeQuantity(line.quantity, ing?.type ?? 'QUANTITY')}
+                          {' × '}
+                          {ing
+                            ? formatCostPerUnit(line.unitCost, ing.type)
+                            : `Rp ${line.unitCost.toLocaleString()}/unit`}
                         </Text>
                       );
                     })}

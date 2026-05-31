@@ -69,10 +69,48 @@ export interface StoreSettings {
   logoUri?: string;
 }
 
+/** @deprecated Use PrinterStation + printerStations */
 export interface BluetoothPrinter {
   name: string;
   address: string;
   connected: boolean;
+}
+
+export const PRINTER_STATION_IDS = ['printer-1', 'printer-2', 'printer-3'] as const;
+export type PrinterStationId = (typeof PRINTER_STATION_IDS)[number];
+
+export interface PrinterDevice {
+  name: string;
+  address: string;
+}
+
+export interface PrinterStation {
+  id: PrinterStationId;
+  label: string;
+  /** Master switch — station ignored when false */
+  enabled: boolean;
+  device: PrinterDevice | null;
+  /** Assigned product category ids — station prints nothing until at least one is set */
+  categoryIds: string[];
+  /** First save on empty table — kitchen slip with all items */
+  printOnTableFirstOrder: boolean;
+  /** Save more items to open table — kitchen slip with new items only */
+  printOnTableAddItems: boolean;
+  /** Checkout — full customer receipt (logo, totals, etc.) */
+  printOnPayment: boolean;
+}
+
+export function createDefaultPrinterStations(): PrinterStation[] {
+  return PRINTER_STATION_IDS.map((id, i) => ({
+    id,
+    label: i === 0 ? 'Cashier' : i === 1 ? 'Kitchen' : 'Bar',
+    enabled: false,
+    device: null,
+    categoryIds: [],
+    printOnTableFirstOrder: i === 1 || i === 2,
+    printOnTableAddItems: i === 1 || i === 2,
+    printOnPayment: i === 0,
+  }));
 }
 
 export type TransactionStatus = 'COMPLETED' | 'CANCELED';
@@ -405,7 +443,12 @@ interface PosState {
    */
   voidTransactionItem: (txId: string, productId: string, qtyToVoid?: number) => void;
   updateStoreSettings: (settings: Partial<StoreSettings>) => void;
+  printerStations: PrinterStation[];
+  updatePrinterStation: (id: PrinterStationId, updates: Partial<PrinterStation>) => void;
+  setPrinterStationDevice: (id: PrinterStationId, device: PrinterDevice | null) => void;
+  /** @deprecated Migrated to printerStations[0] */
   connectedPrinter: BluetoothPrinter | null;
+  /** @deprecated Use setPrinterStationDevice */
   setConnectedPrinter: (printer: BluetoothPrinter | null) => void;
 
   // ── Stock availability helpers ──
@@ -500,6 +543,7 @@ export const usePosStore = create<PosState>()(
       diningTables: [],
       tableOrders: [],
       storeSettings: { ...DEFAULT_STORE_SETTINGS },
+      printerStations: createDefaultPrinterStations(),
       connectedPrinter: null,
 
       // Ingredients
@@ -1202,9 +1246,36 @@ export const usePosStore = create<PosState>()(
       updateStoreSettings: (settings) => set((state) => ({
         storeSettings: { ...state.storeSettings, ...settings }
       })),
-      setConnectedPrinter: (printer) => set(() => ({
-        connectedPrinter: printer
-      })),
+      updatePrinterStation: (id, updates) =>
+        set(state => ({
+          printerStations: state.printerStations.map(s =>
+            s.id === id ? { ...s, ...updates } : s
+          ),
+        })),
+      setPrinterStationDevice: (id, device) =>
+        set(state => ({
+          printerStations: state.printerStations.map(s =>
+            s.id === id ? { ...s, device, enabled: device ? s.enabled : false } : s
+          ),
+          connectedPrinter: id === 'printer-1' && device
+            ? { name: device.name, address: device.address, connected: true }
+            : state.connectedPrinter,
+        })),
+      setConnectedPrinter: printer =>
+        set(state => {
+          const stations = state.printerStations.map(s =>
+            s.id === 'printer-1'
+              ? {
+                  ...s,
+                  device: printer
+                    ? { name: printer.name, address: printer.address }
+                    : null,
+                  enabled: !!printer,
+                }
+              : s
+          );
+          return { connectedPrinter: printer, printerStations: stations };
+        }),
 
       // ── Stock availability helpers ──────────────────────────────────────────
       getCartIngredientUsage: (cartItems) => {
@@ -1448,6 +1519,7 @@ export const usePosStore = create<PosState>()(
           diningTables: [],
           tableOrders: [],
           storeSettings: { ...DEFAULT_STORE_SETTINGS },
+          printerStations: createDefaultPrinterStations(),
           connectedPrinter: null,
         });
         const { removeStoreLogoFile } = await import('../utils/storeLogo');
@@ -1457,7 +1529,7 @@ export const usePosStore = create<PosState>()(
     {
       name: 'pos-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 7,
+      version: 10,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as {
           categories?: { id: string; name: string; color?: string }[];
@@ -1471,7 +1543,55 @@ export const usePosStore = create<PosState>()(
           tableZones?: string[];
           diningTables?: DiningTable[];
           tableOrders?: TableOrder[];
+          connectedPrinter?: BluetoothPrinter | null;
+          printerStations?: PrinterStation[];
         };
+        if (version < 8) {
+          const stations = createDefaultPrinterStations();
+          if (state.connectedPrinter) {
+            stations[0] = {
+              ...stations[0],
+              enabled: true,
+              device: {
+                name: state.connectedPrinter.name,
+                address: state.connectedPrinter.address,
+              },
+              printOnPayment: true,
+            };
+          }
+          state.printerStations = stations;
+        }
+        if (!state.printerStations?.length) {
+          state.printerStations = createDefaultPrinterStations();
+        }
+        if (version < 10 && state.printerStations) {
+          const defaultLabels = ['Cashier', 'Kitchen', 'Bar'] as const;
+          state.printerStations = state.printerStations.map((s, i) => {
+            const legacy = s as PrinterStation & {
+              printOnAddItem?: boolean;
+              printOnTableOrder?: boolean;
+              printOnPosAddItem?: boolean;
+            };
+            const labelLooksGeneric =
+              /^printer\s*[-_]?\s*\d+$/i.test(legacy.label.trim()) ||
+              /^printer\s+\d+$/i.test(legacy.label.trim());
+            const label = labelLooksGeneric
+              ? defaultLabels[i] ?? legacy.label
+              : legacy.label;
+            return {
+              id: legacy.id,
+              label,
+              enabled: legacy.enabled,
+              device: legacy.device,
+              categoryIds: legacy.categoryIds ?? [],
+              printOnTableFirstOrder:
+                legacy.printOnTableFirstOrder ?? legacy.printOnTableOrder ?? false,
+              printOnTableAddItems:
+                legacy.printOnTableAddItems ?? legacy.printOnAddItem ?? false,
+              printOnPayment: legacy.printOnPayment ?? false,
+            };
+          });
+        }
         if (version < 2 && state?.categories) {
           state.categories = state.categories.map((c, i) => ({
             ...c,

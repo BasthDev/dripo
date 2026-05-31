@@ -30,10 +30,17 @@ export default function SettingsIndex() {
     },
     {
       title: 'Printer Settings',
-      desc: 'Connect and configure thermal printers',
+      desc: 'Kitchen / bar / cashier — see docs/PRINTER_SETUP.md',
       icon: 'print-outline',
       color: '#00B894',
       path: '/settings/printer',
+    },
+    {
+      title: 'Device license',
+      desc: 'One device per outlet — see docs/DEVICE_ACTIVATION_OTP.md',
+      icon: 'shield-checkmark-outline',
+      color: Colors.warning,
+      path: '/settings/device-license',
     },
   ];
 

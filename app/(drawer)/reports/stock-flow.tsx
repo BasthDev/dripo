@@ -4,6 +4,7 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Colors, Header, Radius, Spacing, Typography } from '../../../components/ui';
 import { usePosStore } from '../../../store/usePosStore';
 import { MOVEMENT_REASON_LABELS } from '../../../utils/inventoryLabels';
+import { formatRecipeQuantity } from '../../../utils/ingredientCost';
 
 export default function StockFlowScreen() {
   const router = useRouter();
@@ -28,8 +29,10 @@ export default function StockFlowScreen() {
             const dateStr = new Date(item.timestamp).toLocaleString(undefined, {
               month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             });
-            const unit = ing ? (ing.type === 'WEIGHT' ? 'g' : ing.type === 'VOLUME' ? 'ml' : 'pcs') : 'units';
             const isOut = item.type === 'OUT';
+            const qtyLabel = ing
+              ? formatRecipeQuantity(Math.abs(item.quantityDiff), ing.type)
+              : String(Math.abs(item.quantityDiff));
 
             return (
               <View style={styles.row}>
@@ -41,7 +44,8 @@ export default function StockFlowScreen() {
                 </View>
                 <View style={styles.right}>
                   <Text style={[styles.qty, { color: isOut ? Colors.error : Colors.success }]}>
-                    {item.quantityDiff > 0 ? '+' : ''}{item.quantityDiff} {unit}
+                    {item.quantityDiff > 0 ? '+' : item.quantityDiff < 0 ? '−' : ''}
+                    {qtyLabel}
                   </Text>
                   {item.note && <Text style={styles.note}>{item.note}</Text>}
                 </View>

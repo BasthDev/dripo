@@ -15,7 +15,13 @@ import {
     Typography,
 } from '../../components/ui';
 import { useAppPopup } from '../../hooks/useAppPopup';
+import IngredientQtyInput, { defaultQtyForType } from '../../components/ingredients/IngredientQtyInput';
 import { usePosStore } from '../../store/usePosStore';
+import {
+  formatRecipeQuantity,
+  toBaseAmount,
+  type DisplayUnit,
+} from '../../utils/ingredientCost';
 
 export default function AddModifierScreen() {
   const router = useRouter();
@@ -36,6 +42,8 @@ export default function AddModifierScreen() {
   const [popupOpen, setPopupOpen] = useState(false);
   const [pickIngredientId, setPickIngredientId] = useState('');
   const [pickQty, setPickQty] = useState('');
+  const [pickUnit, setPickUnit] = useState<DisplayUnit>('g');
+  const [pickSign, setPickSign] = useState<'+' | '-'>('+');
 
   useEffect(() => {
     if (id) {
@@ -54,23 +62,33 @@ export default function AddModifierScreen() {
     icon: 'cube-outline',
   }));
 
+  const pickIngredient = ingredients.find(i => i.id === pickIngredientId);
+
+  useEffect(() => {
+    if (pickIngredient) setPickUnit(defaultQtyForType(pickIngredient.type));
+  }, [pickIngredient?.id, pickIngredient?.type]);
+
   const handleAddAdjustment = () => {
     const qty = parseFloat(pickQty);
-    if (!pickIngredientId || isNaN(qty) || qty === 0) return;
+    if (!pickIngredientId || !pickIngredient || isNaN(qty) || qty === 0) return;
+    const baseDelta =
+      toBaseAmount(Math.abs(qty), pickUnit) * (pickSign === '-' ? -1 : 1);
+    if (baseDelta === 0) return;
     setAdjustments(prev => {
       const existing = prev.find(a => a.ingredientId === pickIngredientId);
       if (existing) {
         return prev.map(a =>
           a.ingredientId === pickIngredientId
-            ? { ...a, quantityDelta: a.quantityDelta + qty }
+            ? { ...a, quantityDelta: a.quantityDelta + baseDelta }
             : a
         );
       }
-      return [...prev, { ingredientId: pickIngredientId, quantityDelta: qty }];
+      return [...prev, { ingredientId: pickIngredientId, quantityDelta: baseDelta }];
     });
     setPopupOpen(false);
     setPickIngredientId('');
     setPickQty('');
+    setPickSign('+');
   };
 
   const handleSave = () => {
@@ -165,20 +183,14 @@ export default function AddModifierScreen() {
           ) : (
             adjustments.map((adj, idx) => {
               const ing = ingredients.find(i => i.id === adj.ingredientId);
-              const u = ing
-                ? ing.type === 'WEIGHT'
-                  ? 'g'
-                  : ing.type === 'VOLUME'
-                    ? 'ml'
-                    : 'pcs'
-                : '?';
+              const sign = adj.quantityDelta > 0 ? '+' : '';
+              const qtyLabel = ing
+                ? `${sign}${formatRecipeQuantity(Math.abs(adj.quantityDelta), ing.type)}`
+                : `${sign}${adj.quantityDelta}`;
               return (
                 <View key={idx} style={styles.adjRow}>
                   <Text style={styles.adjName}>{ing?.name ?? 'Unknown'}</Text>
-                  <Text style={styles.adjQty}>
-                    {adj.quantityDelta > 0 ? '+' : ''}
-                    {adj.quantityDelta} {u}
-                  </Text>
+                  <Text style={styles.adjQty}>{qtyLabel}</Text>
                   <TouchableOpacity
                     onPress={() =>
                       setAdjustments(prev => prev.filter((_, i) => i !== idx))
@@ -216,14 +228,42 @@ export default function AddModifierScreen() {
           onChange={opt => setPickIngredientId(opt.value)}
           placeholder="Select..."
         />
-        <InputField
-          label="Quantity change (+/-)"
-          placeholder="e.g. 18 for extra espresso"
-          keyboardType="numeric"
-          value={pickQty}
-          onChangeText={setPickQty}
-          containerStyle={{ marginTop: Spacing.md }}
-        />
+        {pickIngredient ? (
+          <>
+            <View style={styles.signRow}>
+              <Text style={styles.signLabel}>Change</Text>
+              <TouchableOpacity
+                style={[styles.signBtn, pickSign === '+' && styles.signBtnActive]}
+                onPress={() => setPickSign('+')}
+              >
+                <Text
+                  style={[styles.signBtnText, pickSign === '+' && styles.signBtnTextActive]}
+                >
+                  Use more (+)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.signBtn, pickSign === '-' && styles.signBtnActive]}
+                onPress={() => setPickSign('-')}
+              >
+                <Text
+                  style={[styles.signBtnText, pickSign === '-' && styles.signBtnTextActive]}
+                >
+                  Use less (−)
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <IngredientQtyInput
+              type={pickIngredient.type}
+              amount={pickQty}
+              unit={pickUnit}
+              onAmountChange={setPickQty}
+              onUnitChange={setPickUnit}
+              label="Amount"
+              style={{ marginTop: Spacing.md }}
+            />
+          </>
+        ) : null}
       </Popup>
       <AppPopup />
     </View>
@@ -255,4 +295,20 @@ const styles = StyleSheet.create({
   },
   adjName: { flex: 1, color: Colors.text, fontWeight: '500' },
   adjQty: { color: Colors.secondary, fontWeight: '700' },
+  signRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.md },
+  signLabel: { color: Colors.textMuted, fontSize: Typography.xs, fontWeight: '600', width: '100%' },
+  signBtn: {
+    flex: 1,
+    minWidth: 120,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+  },
+  signBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '18' },
+  signBtnText: { color: Colors.textMuted, fontSize: Typography.xs, fontWeight: '600' },
+  signBtnTextActive: { color: Colors.primary },
 });

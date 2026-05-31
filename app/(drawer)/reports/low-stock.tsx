@@ -5,20 +5,27 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Header, Colors, Spacing, Typography, Radius, Popup } from '../../../components/ui';
+import IngredientQtyInput, { defaultQtyForType } from '../../../components/ingredients/IngredientQtyInput';
 import { usePosStore, Ingredient } from '../../../store/usePosStore';
+import {
+  formatRecipeQuantity,
+  formatStockDisplay,
+  toBaseAmount,
+  type DisplayUnit,
+} from '../../../utils/ingredientCost';
 
 type Mode = 'view' | 'update';
 
 interface StockUpdateEntry {
   ingredientId: string;
-  value: string; // added quantity as string
+  amount: string;
+  unit: DisplayUnit;
 }
 
 export default function LowStockScreen() {
@@ -44,11 +51,27 @@ export default function LowStockScreen() {
 
   const getEntry = (id: string) => entries.find(e => e.ingredientId === id);
 
-  const setEntry = (id: string, value: string) => {
+  const setEntryAmount = (id: string, amount: string) => {
     setEntries(prev => {
       const existing = prev.find(e => e.ingredientId === id);
-      if (existing) return prev.map(e => e.ingredientId === id ? { ...e, value } : e);
-      return [...prev, { ingredientId: id, value }];
+      if (existing) return prev.map(e => (e.ingredientId === id ? { ...e, amount } : e));
+      const ing = ingredients.find(i => i.id === id);
+      return [
+        ...prev,
+        {
+          ingredientId: id,
+          amount,
+          unit: ing ? defaultQtyForType(ing.type) : 'pcs',
+        },
+      ];
+    });
+  };
+
+  const setEntryUnit = (id: string, unit: DisplayUnit) => {
+    setEntries(prev => {
+      const existing = prev.find(e => e.ingredientId === id);
+      if (existing) return prev.map(e => (e.ingredientId === id ? { ...e, unit } : e));
+      return [...prev, { ingredientId: id, amount: '0', unit }];
     });
   };
 
@@ -56,7 +79,8 @@ export default function LowStockScreen() {
     // Pre-fill entries with "0" as we are doing positive increment updates
     const prefilled = ingredients.map(ing => ({
       ingredientId: ing.id,
-      value: '0',
+      amount: '0',
+      unit: defaultQtyForType(ing.type),
     }));
     setEntries(prefilled);
     setMode('update');
@@ -71,13 +95,13 @@ export default function LowStockScreen() {
 
   const handleSave = () => {
     for (const entry of entries) {
-      const addedQty = parseFloat(entry.value);
-      if (isNaN(addedQty) || addedQty === 0) continue;
+      const addedAmt = parseFloat(entry.amount);
+      if (isNaN(addedAmt) || addedAmt <= 0) continue;
       const ing = ingredients.find(i => i.id === entry.ingredientId);
       if (!ing) continue;
-      
-      // Update by adding (+) instead of replacing
-      updateIngredient(entry.ingredientId, { stock: ing.stock + addedQty });
+      const addedBase = toBaseAmount(addedAmt, entry.unit);
+      if (addedBase <= 0) continue;
+      updateIngredient(entry.ingredientId, { stock: ing.stock + addedBase });
     }
     setEntries([]);
     setMode('view');
@@ -85,12 +109,6 @@ export default function LowStockScreen() {
     setSavedVisible(true);
     // Clear URL params
     router.setParams({ mode: undefined });
-  };
-
-  const unitLabel = (ing: Ingredient) => {
-    if (ing.type === 'WEIGHT') return 'g';
-    if (ing.type === 'VOLUME') return 'ml';
-    return 'pcs';
   };
 
   const getSeverity = (ing: Ingredient): 'critical' | 'low' | 'ok' => {
@@ -112,9 +130,9 @@ export default function LowStockScreen() {
   };
 
   const changedCount = entries.filter(e => {
-    const addedQty = parseFloat(e.value);
+    const addedAmt = parseFloat(e.amount);
     const ing = ingredients.find(i => i.id === e.ingredientId);
-    return !isNaN(addedQty) && ing && addedQty > 0;
+    return !isNaN(addedAmt) && ing && addedAmt > 0;
   }).length;
 
   return (
@@ -134,7 +152,7 @@ export default function LowStockScreen() {
         <View style={styles.updateBanner}>
           <Ionicons name="create-outline" size={16} color={Colors.primary} />
           <Text style={styles.updateBannerText}>
-            Quick Stock Addition — enter amount to add (+) then tap Save
+            Quick Stock Addition — enter kg, L, or pcs to add, then tap Save
           </Text>
         </View>
       ) : (
@@ -174,9 +192,14 @@ export default function LowStockScreen() {
               const severity = getSeverity(ing);
               const color = severityColor(severity);
               const icon = severityIcon(severity);
-              const entry = getEntry(ing.id);
-              const unit = unitLabel(ing);
-              const addedQty = parseFloat(entry?.value ?? '0') || 0;
+              const entry = getEntry(ing.id) ?? {
+                ingredientId: ing.id,
+                amount: '0',
+                unit: defaultQtyForType(ing.type),
+              };
+              const addedAmt = parseFloat(entry.amount) || 0;
+              const addedBase =
+                addedAmt > 0 ? toBaseAmount(addedAmt, entry.unit) : 0;
 
               return (
                 <View key={ing.id} style={[styles.card, mode === 'update' && styles.cardUpdateMode]}>
@@ -199,41 +222,18 @@ export default function LowStockScreen() {
                         <Text style={styles.stockLabel}>Current Stock</Text>
                         {mode === 'view' ? (
                           <Text style={[styles.stockValue, { color }]}>
-                            {ing.stock.toLocaleString()} {unit}
+                            {formatStockDisplay(ing.stock, ing.type)}
                           </Text>
                         ) : (
-                          /* ── Inline stock editor ── */
-                          <View style={styles.stockInputRow}>
-                            <TouchableOpacity
-                              style={styles.qtyBtn}
-                              onPress={() => {
-                                const cur = parseFloat(entry?.value ?? '0') || 0;
-                                setEntry(ing.id, String(Math.max(0, cur - 1)));
-                              }}
-                            >
-                              <Ionicons name="remove" size={16} color={Colors.text} />
-                            </TouchableOpacity>
-
-                            <TextInput
-                              style={styles.stockInput}
-                              value={entry?.value ?? '0'}
-                              onChangeText={(v) => setEntry(ing.id, v)}
-                              keyboardType="decimal-pad"
-                              selectTextOnFocus
-                            />
-
-                            <TouchableOpacity
-                              style={styles.qtyBtn}
-                              onPress={() => {
-                                const cur = parseFloat(entry?.value ?? '0') || 0;
-                                setEntry(ing.id, String(cur + 1));
-                              }}
-                            >
-                              <Ionicons name="add" size={16} color={Colors.text} />
-                            </TouchableOpacity>
-
-                            <Text style={styles.unitLabel}>{unit}</Text>
-                          </View>
+                          <IngredientQtyInput
+                            type={ing.type}
+                            amount={entry.amount}
+                            unit={entry.unit}
+                            onAmountChange={v => setEntryAmount(ing.id, v)}
+                            onUnitChange={u => setEntryUnit(ing.id, u)}
+                            label="Add"
+                            compact
+                          />
                         )}
                       </View>
 
@@ -241,7 +241,8 @@ export default function LowStockScreen() {
                       {ing.lowStockThreshold !== undefined && (
                         <View style={styles.thresholdBadge}>
                           <Text style={styles.thresholdText}>
-                            Threshold: {ing.lowStockThreshold} {unit}
+                            Threshold:{' '}
+                            {formatRecipeQuantity(ing.lowStockThreshold, ing.type)}
                           </Text>
                         </View>
                       )}
@@ -257,9 +258,10 @@ export default function LowStockScreen() {
                     )}
 
                     {/* Delta preview in update mode */}
-                    {mode === 'update' && addedQty > 0 && (
+                    {mode === 'update' && addedBase > 0 && (
                       <Text style={[styles.deltaPreview, { color: Colors.success }]}>
-                        +{addedQty.toLocaleString()} {unit} to be added (New Stock: {(ing.stock + addedQty).toLocaleString()} {unit})
+                        +{formatRecipeQuantity(addedBase, ing.type)} to be added (new:{' '}
+                        {formatStockDisplay(ing.stock + addedBase, ing.type)})
                       </Text>
                     )}
                   </View>

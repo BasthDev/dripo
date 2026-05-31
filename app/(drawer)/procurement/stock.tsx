@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import IngredientProcurementLineFields from '../../../components/ingredients/IngredientProcurementLineFields';
 import {
   Button,
   Colors,
@@ -16,7 +17,13 @@ import {
 } from '../../../components/ui';
 import { useAppPopup } from '../../../hooks/useAppPopup';
 import { usePosStore } from '../../../store/usePosStore';
-import { ingredientUnit } from '../../../utils/ingredientUnits';
+import {
+  defaultIngredientLineInput,
+  formatCostPerUnit,
+  formatStockDisplay,
+  resolveIngredientLine,
+  type IngredientLineInputState,
+} from '../../../utils/ingredientCost';
 
 export default function ReceiveStockScreen() {
   const router = useRouter();
@@ -31,19 +38,23 @@ export default function ReceiveStockScreen() {
   const [invoiceNo, setInvoiceNo] = useState('');
   const [note, setNote] = useState('');
   const [recordExpense, setRecordExpense] = useState(true);
-  const [receiveQty, setReceiveQty] = useState<Record<string, string>>({});
-  const [receiveCost, setReceiveCost] = useState<Record<string, string>>({});
+  const [lineInputs, setLineInputs] = useState<Record<string, IngredientLineInputState>>({});
   const [documentNo] = useState(() => usePosStore.getState().nextStockInDocumentNo());
+
+  const getLineInput = (ingredientId: string) => {
+    const ing = ingredients.find(i => i.id === ingredientId);
+    if (!ing) return defaultIngredientLineInput({ type: 'QUANTITY', costPerUnit: 0 });
+    return lineInputs[ingredientId] ?? defaultIngredientLineInput(ing);
+  };
 
   useEffect(() => {
     if (!focus) return;
     const ing = ingredients.find(i => i.id === focus);
-    if (ing) {
-      setReceiveCost(prev => ({
-        ...prev,
-        [ing.id]: prev[ing.id] ?? String(ing.costPerUnit),
-      }));
-    }
+    if (!ing) return;
+    setLineInputs(prev => ({
+      ...prev,
+      [ing.id]: prev[ing.id] ?? defaultIngredientLineInput(ing),
+    }));
   }, [focus, ingredients]);
 
   const filtered = useMemo(
@@ -59,13 +70,18 @@ export default function ReceiveStockScreen() {
   const receiveLines = useMemo(() => {
     return ingredients
       .map(ing => {
-        const qty = parseFloat(receiveQty[ing.id] ?? '');
-        const cost = parseFloat(receiveCost[ing.id] ?? String(ing.costPerUnit));
-        if (isNaN(qty) || qty <= 0 || isNaN(cost) || cost < 0) return null;
-        return { ingredientId: ing.id, quantity: qty, unitCost: cost };
+        const state = lineInputs[ing.id];
+        if (!state) return null;
+        const resolved = resolveIngredientLine(state, ing.type);
+        if (!resolved) return null;
+        return {
+          ingredientId: ing.id,
+          quantity: resolved.baseQty,
+          unitCost: resolved.unitCost,
+        };
       })
       .filter(Boolean) as { ingredientId: string; quantity: number; unitCost: number }[];
-  }, [ingredients, receiveQty, receiveCost]);
+  }, [ingredients, lineInputs]);
 
   const receiveTotal = receiveLines.reduce((s, l) => s + l.quantity * l.unitCost, 0);
 
@@ -73,7 +89,7 @@ export default function ReceiveStockScreen() {
     if (!receiveLines.length) {
       showMessage({
         title: 'Enter quantities',
-        description: 'Fill qty received for at least one ingredient.',
+        description: 'Fill qty and price for at least one ingredient.',
         icon: 'alert-circle-outline',
       });
       return;
@@ -100,6 +116,11 @@ export default function ReceiveStockScreen() {
     <View style={styles.container}>
       <Header title="Receive Stock" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.intro}>
+          Enter qty in kg, L, or pcs. For price, use package totals (e.g. 1 L @ Rp 25,000) — we
+          calculate cost per g/ml automatically.
+        </Text>
+
         <DocumentBadge label="SI No." documentNo={documentNo} variant="si" />
 
         <Dropdown
@@ -136,40 +157,24 @@ export default function ReceiveStockScreen() {
           placeholder="Search ingredients..."
         />
 
-        {filtered.map(item => {
-          const unit = ingredientUnit(item.type);
-          return (
-            <View
-              key={item.id}
-              style={[styles.row, focus === item.id && styles.rowFocus]}
-            >
-              <View style={styles.rowLeft}>
-                <Text style={styles.name}>{item.name}</Text>
-                <Text style={styles.meta}>
-                  Stock: {item.stock} {unit} · Rp {item.costPerUnit}/{unit}
-                </Text>
-              </View>
-              <View style={styles.inputsCol}>
-                <Text style={styles.inputLabel}>Qty ({unit})</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="0"
-                  keyboardType="numeric"
-                  value={receiveQty[item.id] ?? ''}
-                  onChangeText={v => setReceiveQty(p => ({ ...p, [item.id]: v }))}
-                />
-                <Text style={styles.inputLabel}>Rp/{unit}</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="0"
-                  keyboardType="numeric"
-                  value={receiveCost[item.id] ?? String(item.costPerUnit)}
-                  onChangeText={v => setReceiveCost(p => ({ ...p, [item.id]: v }))}
-                />
-              </View>
-            </View>
-          );
-        })}
+        {filtered.map(item => (
+          <View
+            key={item.id}
+            style={[styles.row, focus === item.id && styles.rowFocus]}
+          >
+            <Text style={styles.name}>{item.name}</Text>
+            <Text style={styles.meta}>
+              Stock: {formatStockDisplay(item.stock, item.type)} ·{' '}
+              {formatCostPerUnit(item.costPerUnit, item.type)}
+            </Text>
+            <IngredientProcurementLineFields
+              ingredient={item}
+              value={getLineInput(item.id)}
+              onChange={v => setLineInputs(p => ({ ...p, [item.id]: v }))}
+              compact
+            />
+          </View>
+        ))}
 
         <InputField label="Note" value={note} onChangeText={setNote} placeholder="Optional" />
 
@@ -193,6 +198,7 @@ export default function ReceiveStockScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: Spacing.lg, gap: Spacing.lg, paddingBottom: 48 },
+  intro: { color: Colors.textSecondary, fontSize: Typography.sm, lineHeight: 20 },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -212,32 +218,16 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
     padding: Spacing.md,
     backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.surfaceBorder,
+    gap: Spacing.sm,
   },
   rowFocus: { borderColor: Colors.primary, borderWidth: 2 },
-  rowLeft: { flex: 1 },
-  name: { color: Colors.text, fontWeight: '600', fontSize: Typography.sm },
-  meta: { color: Colors.textMuted, fontSize: 11, marginTop: 2 },
-  inputsCol: { alignItems: 'flex-end', gap: 2 },
-  inputLabel: { color: Colors.textMuted, fontSize: 9, fontWeight: '600' },
-  input: {
-    width: 76,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    borderRadius: Radius.sm,
-    padding: 6,
-    textAlign: 'center',
-    fontSize: 12,
-    color: Colors.text,
-    backgroundColor: Colors.background,
-  },
+  name: { color: Colors.text, fontWeight: '700', fontSize: Typography.md },
+  meta: { color: Colors.textMuted, fontSize: Typography.xs },
   total: {
     color: Colors.primary,
     fontWeight: '800',

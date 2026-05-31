@@ -11,7 +11,7 @@ import {
   Spacing,
 } from '../../components/ui';
 import { usePosStore } from '../../store/usePosStore';
-import { ingredientUnit } from '../../utils/ingredientUnits';
+import { formatCostPerUnit, formatStockDisplay } from '../../utils/ingredientCost';
 
 export default function IngredientsScreen() {
   const router = useRouter();
@@ -73,13 +73,11 @@ export default function IngredientsScreen() {
           contentContainerStyle={styles.list}
           data={filtered}
           keyExtractor={item => item.id}
-          renderItem={({ item }) => {
-            const unit = ingredientUnit(item.type);
-            return (
+          renderItem={({ item }) => (
               <FlatListCard
                 leftIcon="cube-outline"
                 title={item.name}
-                subtitle={`Stock: ${item.stock} ${unit}`}
+                subtitle={`Stock: ${formatStockDisplay(item.stock, item.type)}`}
                 badge={item.type}
                 badgeColor={
                   item.type === 'WEIGHT'
@@ -88,7 +86,7 @@ export default function IngredientsScreen() {
                       ? Colors.info
                       : Colors.warning
                 }
-                trailingValue={`Rp ${item.costPerUnit}/${unit}`}
+                trailingValue={formatCostPerUnit(item.costPerUnit, item.type)}
                 onPress={() =>
                   router.push({ pathname: '/ingredients/add', params: { id: item.id } })
                 }
@@ -99,8 +97,7 @@ export default function IngredientsScreen() {
                   })
                 }
               />
-            );
-          }}
+            )}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
           ListFooterComponent={
             <Text style={styles.footerHint}>

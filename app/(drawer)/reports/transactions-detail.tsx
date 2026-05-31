@@ -11,7 +11,7 @@ import {
 import { Colors, Header, Popup, Radius, Spacing, Typography } from '../../../components/ui';
 import { useAppPopup } from '../../../hooks/useAppPopup';
 import { TransactionItem, usePosStore } from '../../../store/usePosStore';
-import { printReceipt } from '../../../utils/bluetoothPrinter';
+import { dispatchReprint, hasAnyPrinterConfigured } from '../../../utils/printerRouting';
 
 // ── Reusable Confirmation Popup ─────────────────────────────────────────────
 interface ConfirmPopupProps {
@@ -318,20 +318,23 @@ export default function TransactionsDetailScreen() {
 
   const tx = transactions.find(t => t.id === id);
 
-  const handleReprint = async () => {
+  const handleReprint = () => {
     if (!tx) return;
+    if (!hasAnyPrinterConfigured()) {
+      showMessage({
+        title: 'No printer',
+        description: 'Enable a printer with “Payment receipt” in Settings → Printers.',
+        icon: 'print-outline',
+        iconColor: Colors.warning,
+      });
+      return;
+    }
     try {
-      const success = await printReceipt(tx, storeSettings);
-      if (success) {
-        showMessage({ title: 'Success', description: 'Receipt sent to printer.' });
-      } else {
-        showMessage({
-          title: 'Failed',
-          description: 'Could not print receipt. Please check printer connection in Settings.',
-          icon: 'alert-circle-outline',
-          iconColor: Colors.error,
-        });
-      }
+      dispatchReprint(tx);
+      showMessage({
+        title: 'Queued',
+        description: 'Receipt added to the print queue.',
+      });
     } catch (err: any) {
       console.error('Reprint error:', err);
       showMessage({

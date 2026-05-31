@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   Button,
@@ -15,8 +15,16 @@ import {
   Typography,
 } from '../../../components/ui';
 import { useAppPopup } from '../../../hooks/useAppPopup';
+import IngredientQtyInput from '../../../components/ingredients/IngredientQtyInput';
 import { usePosStore } from '../../../store/usePosStore';
-import { ingredientUnit } from '../../../utils/ingredientUnits';
+import {
+  defaultDisplayUnit,
+  formatRecipeQuantity,
+  formatStockDisplay,
+  fromBaseAmount,
+  toBaseAmount,
+  type DisplayUnit,
+} from '../../../utils/ingredientCost';
 
 const REASON_OPTIONS: DropdownOption[] = [
   { label: 'Monthly physical count', value: 'Monthly physical count', icon: 'calendar-outline' },
@@ -37,7 +45,9 @@ export default function StockOpnameScreen() {
   const [reasonPreset, setReasonPreset] = useState('');
   const [reasonOther, setReasonOther] = useState('');
   const [note, setNote] = useState('');
-  const [countedQty, setCountedQty] = useState<Record<string, string>>({});
+  const [counted, setCounted] = useState<
+    Record<string, { amount: string; unit: DisplayUnit }>
+  >({});
   const [documentNo] = useState(() => usePosStore.getState().nextStockOpnameDocumentNo());
 
   const filtered = useMemo(
@@ -51,14 +61,16 @@ export default function StockOpnameScreen() {
   const countLines = useMemo(() => {
     return ingredients
       .map(ing => {
-        const raw = countedQty[ing.id];
-        if (raw === undefined || raw === '') return null;
-        const qty = parseFloat(raw);
-        if (isNaN(qty) || qty < 0 || qty === ing.stock) return null;
-        return { ingredientId: ing.id, countedQty: qty };
+        const draft = counted[ing.id];
+        if (!draft || draft.amount === '') return null;
+        const qty = parseFloat(draft.amount);
+        if (isNaN(qty) || qty < 0) return null;
+        const baseQty = toBaseAmount(qty, draft.unit);
+        if (baseQty === ing.stock) return null;
+        return { ingredientId: ing.id, countedQty: baseQty };
       })
       .filter(Boolean) as { ingredientId: string; countedQty: number }[];
-  }, [ingredients, countedQty]);
+  }, [ingredients, counted]);
 
   const history = useMemo(
     () => [...stockOpnames].sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
@@ -137,6 +149,9 @@ export default function StockOpnameScreen() {
         />
 
         <Text style={styles.section}>COUNT ITEMS</Text>
+        <Text style={styles.countHint}>
+          Count in kg, L, or pcs. We compare to system stock automatically.
+        </Text>
       </ScrollView>
 
       <View style={styles.searchWrap}>
@@ -170,18 +185,24 @@ export default function StockOpnameScreen() {
           ) : null
         }
         renderItem={({ item }) => {
-          const unit = ingredientUnit(item.type);
-          const counted = countedQty[item.id] ?? '';
-          const countedN = parseFloat(counted);
+          const defUnit = defaultDisplayUnit(item.type);
+          const draft = counted[item.id] ?? {
+            amount: String(fromBaseAmount(item.stock, defUnit)),
+            unit: defUnit,
+          };
+          const countedN =
+            draft.amount !== ''
+              ? toBaseAmount(parseFloat(draft.amount) || 0, draft.unit)
+              : null;
           const variance =
-            counted !== '' && !isNaN(countedN) ? countedN - item.stock : null;
+            countedN !== null && !isNaN(countedN) ? countedN - item.stock : null;
 
           return (
             <View style={styles.row}>
               <View style={styles.rowLeft}>
                 <Text style={styles.name}>{item.name}</Text>
                 <Text style={styles.meta}>
-                  System: {item.stock} {unit}
+                  System: {formatStockDisplay(item.stock, item.type)}
                 </Text>
                 {variance !== null && variance !== 0 ? (
                   <Text
@@ -191,17 +212,31 @@ export default function StockOpnameScreen() {
                     ]}
                   >
                     Variance: {variance > 0 ? '+' : ''}
-                    {variance} {unit}
+                    {formatRecipeQuantity(Math.abs(variance), item.type)}
                   </Text>
                 ) : null}
               </View>
-              <TextInput
-                style={styles.input}
-                placeholder={String(item.stock)}
-                keyboardType="numeric"
-                value={counted}
-                onChangeText={v => setCountedQty(p => ({ ...p, [item.id]: v }))}
-              />
+              <View style={styles.countField}>
+                <IngredientQtyInput
+                  type={item.type}
+                  amount={draft.amount}
+                  unit={draft.unit}
+                  onAmountChange={amount =>
+                    setCounted(p => ({
+                      ...p,
+                      [item.id]: { ...draft, amount },
+                    }))
+                  }
+                  onUnitChange={unit =>
+                    setCounted(p => ({
+                      ...p,
+                      [item.id]: { ...draft, unit },
+                    }))
+                  }
+                  label="Counted"
+                  compact
+                />
+              </View>
             </View>
           );
         }}
@@ -235,6 +270,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
   },
+  countHint: {
+    color: Colors.textSecondary,
+    fontSize: Typography.xs,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+  },
   searchWrap: { paddingHorizontal: Spacing.lg },
   list: { padding: Spacing.lg, paddingBottom: 100 },
   historyBlock: {
@@ -255,9 +296,8 @@ const styles = StyleSheet.create({
   historyDoc: { color: Colors.warning, fontWeight: '800', fontSize: Typography.sm },
   historyMeta: { color: Colors.textSecondary, fontSize: Typography.xs, marginTop: 2 },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
+    flexDirection: 'column',
+    gap: Spacing.sm,
     padding: Spacing.md,
     marginBottom: Spacing.sm,
     backgroundColor: Colors.surface,
@@ -269,16 +309,7 @@ const styles = StyleSheet.create({
   name: { color: Colors.text, fontWeight: '600' },
   meta: { color: Colors.textMuted, fontSize: 11, marginTop: 2 },
   variance: { fontSize: 11, fontWeight: '700', marginTop: 2 },
-  input: {
-    width: 80,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    borderRadius: Radius.sm,
-    padding: Spacing.sm,
-    textAlign: 'center',
-    color: Colors.text,
-    backgroundColor: Colors.background,
-  },
+  countField: { marginTop: Spacing.xs },
   footer: {
     padding: Spacing.lg,
     borderTopWidth: 1,

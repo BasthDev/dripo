@@ -4,6 +4,15 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button, Colors, Dropdown, DropdownOption, Header, InputField, Popup, Radius, Spacing, Typography } from '../../components/ui';
 import { useAppPopup } from '../../hooks/useAppPopup';
+import {
+  bestDisplayForBase,
+  defaultDisplayUnit,
+  displayUnitOptionsForDropdown,
+  formatCostPerUnit,
+  formatRecipeQuantity,
+  toBaseAmount,
+  type DisplayUnit,
+} from '../../utils/ingredientCost';
 import { RecipeIngredient, usePosStore } from '../../store/usePosStore';
 
 export default function AddRecipeScreen() {
@@ -19,6 +28,7 @@ export default function AddRecipeScreen() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [selectedIngredientId, setSelectedIngredientId] = useState<string>('');
   const [quantity, setQuantity] = useState('');
+  const [quantityUnit, setQuantityUnit] = useState<DisplayUnit>('g');
 
   const { ingredients, recipes, addRecipe, updateRecipe, deleteRecipe, isRecipeInUse } = usePosStore();
 
@@ -36,13 +46,22 @@ export default function AddRecipeScreen() {
     setIsUpdating(false);
     setSelectedIngredientId('');
     setQuantity('');
+    setQuantityUnit('g');
     setPopupOpen(true);
   };
 
-  const handleOpenUpdatePopup = (ingId: string, qty: number) => {
+  const handleOpenUpdatePopup = (ingId: string, baseQty: number) => {
+    const ing = ingredients.find(i => i.id === ingId);
     setIsUpdating(true);
     setSelectedIngredientId(ingId);
-    setQuantity(qty.toString());
+    if (ing) {
+      const { amount, unit } = bestDisplayForBase(baseQty, ing.type);
+      setQuantity(amount);
+      setQuantityUnit(unit);
+    } else {
+      setQuantity(baseQty.toString());
+      setQuantityUnit('g');
+    }
     setPopupOpen(true);
   };
 
@@ -54,17 +73,25 @@ export default function AddRecipeScreen() {
     const ing = ingredients.find(i => i.id === selectedIngredientId);
     if (!ing) return;
 
-    setRecipeIngredients((prev) => {
-      // If already exists, update qty and UPDATE snapshot cost (since we are touching it)
+    const baseQty = toBaseAmount(qtyParsed, quantityUnit);
+
+    setRecipeIngredients(prev => {
       const existing = prev.find(p => p.ingredientId === selectedIngredientId);
       if (existing) {
-        return prev.map(p => 
-          p.ingredientId === selectedIngredientId 
-            ? { ...p, quantity: isUpdating ? qtyParsed : p.quantity + qtyParsed, snapshotCost: ing.costPerUnit } 
+        return prev.map(p =>
+          p.ingredientId === selectedIngredientId
+            ? {
+                ...p,
+                quantity: isUpdating ? baseQty : p.quantity + baseQty,
+                snapshotCost: ing.costPerUnit,
+              }
             : p
         );
       }
-      return [...prev, { ingredientId: selectedIngredientId, quantity: qtyParsed, snapshotCost: ing.costPerUnit }];
+      return [
+        ...prev,
+        { ingredientId: selectedIngredientId, quantity: baseQty, snapshotCost: ing.costPerUnit },
+      ];
     });
     setPopupOpen(false);
   };
@@ -93,13 +120,21 @@ export default function AddRecipeScreen() {
 
   // Dropdown options
   const ingredientOptions: DropdownOption[] = ingredients.map(ing => ({
-    label: `${ing.name} (Recent Cost: Rp ${ing.costPerUnit}/${ing.type === 'WEIGHT' ? 'g' : ing.type === 'VOLUME' ? 'ml' : 'pcs'})`,
+    label: `${ing.name} · ${formatCostPerUnit(ing.costPerUnit, ing.type)}`,
     value: ing.id,
-    icon: 'cube-outline'
+    icon: 'cube-outline',
   }));
 
   const selectedIng = ingredients.find(i => i.id === selectedIngredientId);
-  const unitStr = selectedIng ? (selectedIng.type === 'WEIGHT' ? 'grams' : selectedIng.type === 'VOLUME' ? 'ml' : 'pcs') : 'units';
+  const unitOptions = selectedIng ? displayUnitOptionsForDropdown(selectedIng.type) : [];
+
+  const handleIngredientSelect = (ingredientId: string) => {
+    setSelectedIngredientId(ingredientId);
+    const ing = ingredients.find(i => i.id === ingredientId);
+    if (ing) {
+      setQuantityUnit(defaultDisplayUnit(ing.type));
+    }
+  };
 
   const handleDelete = () => {
     if (!id) return;
@@ -159,7 +194,7 @@ export default function AddRecipeScreen() {
               const ing = ingredients.find(i => i.id === ri.ingredientId);
               // Handle case where ingredient might have been deleted, fallback to snapshot cost and ID.
               const dispName = ing ? ing.name : `Deleted Item`;
-              const u = ing ? (ing.type === 'WEIGHT' ? 'g' : ing.type === 'VOLUME' ? 'ml' : 'pcs') : 'unit';
+              const qtyLabel = ing ? formatRecipeQuantity(ri.quantity, ing.type) : `${ri.quantity}`;
               
               const unitCost = ing ? ing.costPerUnit : (ri.snapshotCost || 0);
               const subtotal = unitCost * ri.quantity;
@@ -173,7 +208,9 @@ export default function AddRecipeScreen() {
                 >
                   <View style={styles.itemInfo}>
                     <Text style={styles.itemName}>{dispName}</Text>
-                    <Text style={styles.itemDetails}>{ri.quantity} {u} × Rp {unitCost.toLocaleString()}</Text>
+                    <Text style={styles.itemDetails}>
+                      {qtyLabel} × Rp {unitCost.toLocaleString()}
+                    </Text>
                     {!ing && (
                       <Text style={styles.warnText}>Ingredient deleted — update this recipe.</Text>
                     )}
@@ -221,19 +258,30 @@ export default function AddRecipeScreen() {
               placeholder="Select from stock..."
               options={ingredientOptions}
               value={selectedIngredientId}
-              onChange={(opt) => setSelectedIngredientId(opt.value)}
+              onChange={opt => handleIngredientSelect(opt.value)}
               disabled={isUpdating}
             />
           </View>
           {selectedIngredientId !== '' && (
-            <InputField
-              label={`Quantity required (${unitStr})`}
-              placeholder="0"
-              keyboardType="numeric"
-              value={quantity}
-              onChangeText={setQuantity}
-              containerStyle={{ marginTop: Spacing.md }}
-            />
+            <View style={styles.qtyRow}>
+              <View style={styles.qtyField}>
+                <InputField
+                  label="Amount used"
+                  placeholder="e.g. 18"
+                  keyboardType="decimal-pad"
+                  value={quantity}
+                  onChangeText={setQuantity}
+                />
+              </View>
+              <View style={styles.qtyUnit}>
+                <Dropdown
+                  label="Unit"
+                  options={unitOptions}
+                  value={quantityUnit}
+                  onChange={opt => setQuantityUnit(opt.value as DisplayUnit)}
+                />
+              </View>
+            </View>
           )}
         </View>
       </Popup>
@@ -262,4 +310,12 @@ const styles = StyleSheet.create({
   summaryValue: { color: Colors.text, fontSize: Typography.xxl, fontWeight: '700', marginTop: Spacing.xs },
   saveBtn: { marginTop: Spacing.sm },
   popupContent: { paddingVertical: Spacing.md },
+  qtyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  qtyField: { flex: 1 },
+  qtyUnit: { width: 130 },
 });

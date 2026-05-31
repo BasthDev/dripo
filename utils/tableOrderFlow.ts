@@ -2,7 +2,7 @@ import type { Href } from 'expo-router';
 import type { CartItem } from '../store/useCartStore';
 import { useCartStore } from '../store/useCartStore';
 import { usePosStore } from '../store/usePosStore';
-import { printReceipt } from './bluetoothPrinter';
+import { dispatchTableKitchenPrint } from './printerRouting';
 import { buildTableOrderReceiptTx, cartToTableLines } from './tableOrder';
 
 export type TableOrderNavFrom = 'orders' | 'pos';
@@ -127,8 +127,7 @@ export async function saveTableOrderAndContinue(
   const table = usePosStore.getState().diningTables.find(t => t.id === input.tableId);
   if (!table || !input.items.length) return null;
 
-  const { upsertOpenTableOrder, categories, modifiers, storeSettings, connectedPrinter } =
-    usePosStore.getState();
+  const { upsertOpenTableOrder, categories, modifiers } = usePosStore.getState();
 
   const existingOpen = usePosStore
     .getState()
@@ -144,20 +143,18 @@ export async function saveTableOrderAndContinue(
   const order = usePosStore.getState().tableOrders.find(o => o.id === orderId);
   const documentNo = order?.documentNo ?? '—';
 
-  const receiptTx = buildTableOrderReceiptTx(input.items, categories, modifiers, {
-    orderId,
-    documentNo,
+  const printMeta = {
     tableName: table.name,
     zone: table.zone,
+    documentNo,
     orderNote: input.orderNote?.trim() || undefined,
-  });
+  };
 
-  if (connectedPrinter) {
-    try {
-      await printReceipt(receiptTx, storeSettings);
-    } catch (e) {
-      console.error('[tableOrderFlow] Auto-print error:', e);
-    }
+  const isFirstOrder = !existingOpen;
+  if (isFirstOrder) {
+    dispatchTableKitchenPrint(input.items, printMeta, 'first');
+  } else {
+    dispatchTableKitchenPrint(input.items, printMeta, 'add');
   }
 
   useCartStore.getState().clearCart();

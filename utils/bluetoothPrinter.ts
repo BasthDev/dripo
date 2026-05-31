@@ -211,6 +211,28 @@ export async function disconnectDevice(address: string): Promise<boolean> {
   }
 }
 
+/** Connect → run → disconnect (safe for multi-printer queues). */
+export async function withPrinterConnection(
+  address: string,
+  action: () => Promise<boolean>
+): Promise<boolean> {
+  if (!isNativeSupported) {
+    await action();
+    return true;
+  }
+  const ok = await connectDevice(address);
+  if (!ok) return false;
+  try {
+    return await action();
+  } finally {
+    try {
+      await disconnectDevice(address);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 // 58mm printer has 32 columns
 function formatLine(left: string, right: string, width = 32): string {
   const spaceCount = width - left.length - right.length;
@@ -222,7 +244,125 @@ function formatLine(left: string, right: string, width = 32): string {
   return left + ' '.repeat(spaceCount) + right;
 }
 
+export type ReceiptPrintOptions = {
+  stationLabel?: string;
+  headerTitle?: string;
+  /** Skip logo/QR for kitchen-style slips */
+  compact?: boolean;
+};
+
+export type KitchenTicketLine = {
+  name: string;
+  quantity: number;
+  note?: string;
+  modifiers?: string[];
+  categoryName?: string;
+};
+
+export type KitchenTicketPayload = {
+  title?: string;
+  tableName?: string;
+  zone?: string;
+  documentNo?: string;
+  orderNote?: string;
+  lines: KitchenTicketLine[];
+  timestamp?: string;
+};
+
+export async function printReceiptOnDevice(
+  address: string,
+  tx: any,
+  storeSettings: any,
+  options?: ReceiptPrintOptions
+): Promise<boolean> {
+  return withPrinterConnection(address, () =>
+    printReceiptBody(tx, storeSettings, options)
+  );
+}
+
+export async function printKitchenTicketOnDevice(
+  address: string,
+  ticket: KitchenTicketPayload,
+  storeSettings: any,
+  options?: { stationLabel?: string }
+): Promise<boolean> {
+  return withPrinterConnection(address, () =>
+    printKitchenTicketBody(ticket, storeSettings, options)
+  );
+}
+
+/** @deprecated Use printReceiptOnDevice via printerRouting */
 export async function printReceipt(tx: any, storeSettings: any): Promise<boolean> {
+  if (!isNativeSupported) {
+    console.log('[BluetoothPrinter] (Demo Print) Transaction Receipt:\n', tx);
+    return true;
+  }
+  return printReceiptBody(tx, storeSettings);
+}
+
+/** Kitchen / bar — minimal slip: table, order id, time, items only. */
+async function printKitchenTicketBody(
+  ticket: KitchenTicketPayload,
+  _storeSettings: any,
+  _options?: { stationLabel?: string }
+): Promise<boolean> {
+  if (!isNativeSupported) {
+    console.log('[BluetoothPrinter] (Demo Kitchen)\n', ticket);
+    return true;
+  }
+
+  try {
+    const dateStr = ticket.timestamp
+      ? new Date(ticket.timestamp).toLocaleString()
+      : new Date().toLocaleString();
+
+    await BluetoothEscposPrinter.printerAlign(BluetoothEscposPrinter.ALIGN.CENTER);
+    if (ticket.tableName) {
+      const zone = ticket.zone ? ` · ${ticket.zone}` : '';
+      await BluetoothEscposPrinter.printText(
+        `TABLE ${ticket.tableName}${zone}\n`,
+        { widthtimes: 2, heigthtimes: 2, fonttype: 2 }
+      );
+    }
+    await BluetoothEscposPrinter.printText('--------------------------------\n', {});
+
+    await BluetoothEscposPrinter.printerAlign(BluetoothEscposPrinter.ALIGN.LEFT);
+    if (ticket.documentNo) {
+      await BluetoothEscposPrinter.printText(`Order: ${ticket.documentNo}\n`, {});
+    }
+    await BluetoothEscposPrinter.printText(`Time: ${dateStr}\n`, {});
+    if (ticket.orderNote?.trim()) {
+      await BluetoothEscposPrinter.printText(`Note: ${ticket.orderNote.trim()}\n`, {});
+    }
+    await BluetoothEscposPrinter.printText('--------------------------------\n', {});
+
+    for (const line of ticket.lines) {
+      await BluetoothEscposPrinter.printText(
+        `${line.quantity}x ${line.name}\n`,
+        { widthtimes: 1, heigthtimes: 2, fonttype: 2 }
+      );
+      for (const mod of line.modifiers ?? []) {
+        await BluetoothEscposPrinter.printText(`   + ${mod}\n`, {});
+      }
+      if (line.note?.trim()) {
+        await BluetoothEscposPrinter.printText(`   * ${line.note.trim()}\n`, {});
+      }
+    }
+
+    await BluetoothEscposPrinter.printText('--------------------------------\n', {});
+    await BluetoothEscposPrinter.printText('\n\n\n', {});
+    return true;
+  } catch (error) {
+    console.error('[BluetoothPrinter] Kitchen print error:', error);
+    return false;
+  }
+}
+
+async function printReceiptBody(
+  tx: any,
+  storeSettings: any,
+  options?: ReceiptPrintOptions
+): Promise<boolean> {
   if (!isNativeSupported) {
     console.log('[BluetoothPrinter] (Demo Print) Transaction Receipt:\n', tx);
     return true;
@@ -272,7 +412,16 @@ export async function printReceipt(tx: any, storeSettings: any): Promise<boolean
     const dateStr = tx.timestamp ? new Date(tx.timestamp).toLocaleString() : new Date().toLocaleString();
     await BluetoothEscposPrinter.printText(`ID: #${tx.id.substring(0, 6).toUpperCase()}\n`, {});
     await BluetoothEscposPrinter.printText(`Date: ${dateStr}\n`, {});
-    await BluetoothEscposPrinter.printText(`Payment: ${tx.paymentMethod}\n`, {});
+    if (tx.tableName) {
+      const zone = tx.zone ? ` (${tx.zone})` : '';
+      await BluetoothEscposPrinter.printText(`Table: ${tx.tableName}${zone}\n`, {});
+    }
+    if (tx.documentNo) {
+      await BluetoothEscposPrinter.printText(`Order: ${tx.documentNo}\n`, {});
+    }
+    if (tx.paymentMethod) {
+      await BluetoothEscposPrinter.printText(`Payment: ${tx.paymentMethod}\n`, {});
+    }
     if (tx.orderNote) {
       await BluetoothEscposPrinter.printText(`Note: ${tx.orderNote}\n`, {});
     }
@@ -313,7 +462,7 @@ export async function printReceipt(tx: any, storeSettings: any): Promise<boolean
     await BluetoothEscposPrinter.printText('--------------------------------\n', {});
 
     // 5. Print QR Code if available
-    if (storeSettings.qrData) {
+    if (!options?.compact && storeSettings.qrData) {
       await BluetoothEscposPrinter.printerAlign(BluetoothEscposPrinter.ALIGN.CENTER);
       await BluetoothEscposPrinter.printQRCode(storeSettings.qrData, 250, 3);
       await BluetoothEscposPrinter.printText('\n', {});

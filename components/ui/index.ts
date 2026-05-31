@@ -23,4 +23,6 @@ export type { HeaderVariant } from './Header';
 export { default as DocumentBadge } from './DocumentBadge';
 export type { DocumentBadgeVariant } from './DocumentBadge';
 
+export { default as OnOffToggle } from './OnOffToggle';
+
 export { Colors, Spacing, Radius, Typography, Shadow } from './theme';

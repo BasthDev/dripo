@@ -96,6 +96,9 @@ export function buildTableOrderReceiptTx(
       meta.orderNote?.trim() ||
       `Table ${meta.tableName} · ${meta.zone} · Not paid yet`,
     status: 'COMPLETED' as const,
+    tableName: meta.tableName,
+    zone: meta.zone,
+    documentNo: meta.documentNo,
   };
 }
 

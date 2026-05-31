@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { Colors, Radius, Spacing, Typography } from '../../components/ui';
+import { useDeviceSessionGuard } from '../../hooks/useDeviceSessionGuard';
 import {
   isOrdersActive as checkOrdersActive,
   isDashboardActive,
@@ -169,7 +170,7 @@ function CustomDrawerContent(props: any) {
         >
           <View style={styles.dropdownHeaderLeft}>
             <Ionicons
-              name="grid-outline"
+              name="menu-outline"
               size={24}
               color={
                 isMgmtActive ? Colors.primary : Colors.text
@@ -461,6 +462,7 @@ function CustomDrawerContent(props: any) {
 }
 
 export default function DrawerLayout() {
+  useDeviceSessionGuard();
   const { width, height } = useWindowDimensions();
 
   const isLandscape = width > height;

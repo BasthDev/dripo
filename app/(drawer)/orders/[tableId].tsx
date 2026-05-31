@@ -12,8 +12,11 @@ import { Button, Colors, Header, Radius, Spacing, Typography } from '../../../co
 import { useAppPopup } from '../../../hooks/useAppPopup';
 import { getCartLineUnitPrice } from '../../../store/useCartStore';
 import { usePosStore } from '../../../store/usePosStore';
-import { printReceipt } from '../../../utils/bluetoothPrinter';
-import { buildTableOrderReceiptTx, tableLinesToCart } from '../../../utils/tableOrder';
+import {
+  dispatchTableKitchenReprint,
+  hasAnyPrinterConfigured,
+} from '../../../utils/printerRouting';
+import { tableLinesToCart } from '../../../utils/tableOrder';
 import {
   navigateToAddTableItems,
   navigateToEditTable,
@@ -34,9 +37,6 @@ export default function TableOrderDetailScreen() {
   const products = usePosStore(s => s.products);
   const modifiers = usePosStore(s => s.modifiers);
   const categories = usePosStore(s => s.categories);
-  const storeSettings = usePosStore(s => s.storeSettings);
-  const connectedPrinter = usePosStore(s => s.connectedPrinter);
-
   const isWide = width >= 768 || width > height;
 
   const cartItems = useMemo(() => {
@@ -55,10 +55,10 @@ export default function TableOrderDetailScreen() {
 
   const handleReprint = useCallback(async () => {
     if (!order || !table) return;
-    if (!connectedPrinter) {
+    if (!hasAnyPrinterConfigured()) {
       showMessage({
         title: 'No printer',
-        description: 'Connect a Bluetooth printer in Settings first.',
+        description: 'Enable at least one printer in Settings → Printers.',
         icon: 'print-outline',
         iconColor: Colors.warning,
       });
@@ -73,28 +73,17 @@ export default function TableOrderDetailScreen() {
       });
       return;
     }
-    const receiptTx = buildTableOrderReceiptTx(cartItems, categories, modifiers, {
-      orderId: order.id,
-      documentNo: order.documentNo,
-      tableName: table.name,
-      zone: table.zone,
-      orderNote: order.orderNote,
-    });
     try {
-      const success = await printReceipt(receiptTx, storeSettings);
-      if (success) {
-        showMessage({
-          title: 'Printed',
-          description: 'Table order receipt sent to printer.',
-        });
-      } else {
-        showMessage({
-          title: 'Print failed',
-          description: 'Could not print. Check the printer connection in Settings.',
-          icon: 'alert-circle-outline',
-          iconColor: Colors.error,
-        });
-      }
+      dispatchTableKitchenReprint(cartItems, {
+        tableName: table.name,
+        zone: table.zone,
+        documentNo: order.documentNo,
+        orderNote: order.orderNote,
+      });
+      showMessage({
+        title: 'Queued',
+        description: 'Print job sent to configured printers (one at a time).',
+      });
     } catch (e) {
       console.error('[TableOrderDetail] Print error:', e);
       showMessage({
@@ -107,11 +96,9 @@ export default function TableOrderDetailScreen() {
   }, [
     order,
     table,
-    connectedPrinter,
     cartItems,
     categories,
     modifiers,
-    storeSettings,
     showMessage,
   ]);
 
@@ -162,21 +149,9 @@ export default function TableOrderDetailScreen() {
 
   const actionPanel = (
     <View style={[styles.actionsPanel, !isWide && styles.actionsPanelStacked]}>
+      
       <Button
-        label="Add item"
-        variant="primary"
-        iconLeft="add-circle-outline"
-        fullWidth
-        onPress={() => navigateToAddTableItems(router, tableId)}
-      />
-      <Button
-        label="Edit items"
-        variant="outline"
-        iconLeft="create-outline"
-        fullWidth
-        onPress={() => navigateToEditTable(router, tableId)}
-      />
-      <Button
+        style={{ height: 100 }}
         label="Payment"
         variant="success"
         iconLeft="card-outline"
@@ -184,11 +159,36 @@ export default function TableOrderDetailScreen() {
         onPress={handlePayment}
       />
       <Button
+        style={{ height: 100 }}
+        label="Add item"
+        variant="primary"
+        iconLeft="add-circle-outline"
+        fullWidth
+        onPress={() => navigateToAddTableItems(router, tableId)}
+      />
+      <Button
+        style={{ height: 100 }}
+        label="Edit items"
+        variant="outline"
+        iconLeft="create-outline"
+        fullWidth
+        onPress={() => navigateToEditTable(router, tableId)}
+      />
+      <Button
+        style={{ height: 100 }}
         label="Reprint"
         variant="outline"
         iconLeft="print-outline"
         fullWidth
         onPress={() => void handleReprint()}
+      />
+      <Button
+        style={{ height: 100 }}
+        label="Bact to Sale"
+        variant="outline"
+        iconLeft="bag-handle-outline"
+        fullWidth
+        onPress={() => router.replace('/pos')}
       />
     </View>
   );
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
   actionsPanel: {
     flex: 1,
     maxWidth: 320,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
     gap: Spacing.md,
     padding: Spacing.lg,
     backgroundColor: Colors.surface,

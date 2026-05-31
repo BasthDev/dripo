@@ -13,7 +13,7 @@ import { Button, Colors, Header, Radius, Spacing, Typography } from '../../../co
 import { useAppPopup } from '../../../hooks/useAppPopup';
 import { usePosStore } from '../../../store/usePosStore';
 import { useOpenTableTotalsByTableId } from '../../../utils/tableOrder';
-import { navigateToEditTable } from '../../../utils/tableOrderFlow';
+import { navigateToTableOrderDetail } from '../../../utils/tableOrderFlow';
 
 const TABLE_EMPTY_BG = '#FFFFFF';
 const TABLE_OPEN_BG = '#E8D5B5';
@@ -50,7 +50,7 @@ export default function TableOrdersScreen() {
     if (!order) {
       return;
     }
-    navigateToEditTable(router, tableId);
+    navigateToTableOrderDetail(router, tableId);
   };
 
   const handleLongPress = (tableId: string, tableName: string) => {
@@ -69,7 +69,7 @@ export default function TableOrdersScreen() {
     <View style={styles.container}>
       <Header
         title="Table Orders"
-        subtitle="White = free · brown = open order · tap to update items"
+        subtitle="White = free · brown = open order · tap to manage"
         actions={[
           {
             icon: 'settings-outline',
@@ -147,7 +147,7 @@ export default function TableOrdersScreen() {
                     {total > 0 ? (
                       <Text style={styles.tableTotal}>Rp {total.toLocaleString()}</Text>
                     ) : null}
-                    <Text style={styles.tapHint}>Tap to update</Text>
+                    <Text style={styles.tapHint}>Tap to manage</Text>
                   </>
                 ) : (
                   <Text style={styles.tableFree}>No order</Text>

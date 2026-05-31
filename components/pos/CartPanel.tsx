@@ -9,6 +9,7 @@ import {
     navigateToSelectTable,
     saveTableOrderAndContinue,
     type TableOrderNavFrom,
+    type TableSaleMode,
 } from '../../utils/tableOrderFlow';
 import { Button, Colors, Radius, Spacing, Typography } from '../ui';
 import CartItemNotePopup from './CartItemNotePopup';
@@ -17,9 +18,11 @@ import CartModifierPopup from './CartModifierPopup';
 type CartPanelProps = {
   /** Where Sale was opened from — drives save success navigation */
   navFrom?: TableOrderNavFrom;
+  /** add = adding new items from table; edit = editing full order */
+  tableSaleMode?: TableSaleMode;
 };
 
-export default function CartPanel({ navFrom = 'pos' }: CartPanelProps) {
+export default function CartPanel({ navFrom = 'pos', tableSaleMode }: CartPanelProps) {
   const router = useRouter();
   const { showMessage, AppPopup } = useAppPopup();
   const {
@@ -77,8 +80,11 @@ export default function CartPanel({ navFrom = 'pos' }: CartPanelProps) {
       items,
       orderNote,
       navFrom,
+      saleMode: tableSaleMode,
     });
   };
+
+  const hidePayNow = tableSaleMode === 'add';
 
   return (
     <View style={styles.container}>
@@ -213,13 +219,15 @@ export default function CartPanel({ navFrom = 'pos' }: CartPanelProps) {
           disabled={items.length === 0}
           onPress={handleSaveTableOrder}
         />
-        <Button
-          label={activeTableId ? 'Pay now' : 'Proceed to Payment'}
-          variant="primary"
-          fullWidth
-          disabled={items.length === 0}
-          onPress={handleCheckout}
-        />
+        {!hidePayNow ? (
+          <Button
+            label={activeTableId ? 'Pay now' : 'Proceed to Payment'}
+            variant="primary"
+            fullWidth
+            disabled={items.length === 0}
+            onPress={handleCheckout}
+          />
+        ) : null}
       </View>
 
       <CartItemNotePopup

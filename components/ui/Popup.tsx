@@ -30,7 +30,6 @@ interface PopupProps {
   icon?: keyof typeof Ionicons.glyphMap;
   iconColor?: string;
   actions?: PopupAction[];
-  /** stack = vertical; row = side-by-side (default row when 2 actions) */
   actionsLayout?: 'stack' | 'row' | 'auto';
   dismissable?: boolean;
   children?: React.ReactNode;
@@ -57,15 +56,40 @@ export default function Popup({
   useEffect(() => {
     if (visible) {
       Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(cardScale, { toValue: 1, speed: 25, bounciness: 6, useNativeDriver: true }),
-        Animated.timing(cardOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.spring(cardScale, {
+          toValue: 1,
+          speed: 25,
+          bounciness: 6,
+          useNativeDriver: true,
+        }),
+        Animated.timing(cardOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
-        Animated.timing(cardScale, { toValue: 0.92, duration: 160, useNativeDriver: true }),
-        Animated.timing(cardOpacity, { toValue: 0, duration: 160, useNativeDriver: true }),
+        Animated.timing(backdropOpacity, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(cardScale, {
+          toValue: 0.92,
+          duration: 160,
+          useNativeDriver: true,
+        }),
+        Animated.timing(cardOpacity, {
+          toValue: 0,
+          duration: 160,
+          useNativeDriver: true,
+        }),
       ]).start();
     }
   }, [visible]);
@@ -75,14 +99,23 @@ export default function Popup({
     (actionsLayout === 'auto' && actions.length === 2);
 
   return (
-    <Modal transparent visible={visible} animationType="none" onRequestClose={dismissable ? onClose : undefined}>
+    <Modal
+      transparent
+      visible={visible}
+      animationType="none"
+      onRequestClose={dismissable ? onClose : undefined}
+    >
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* ── Backdrop ── */}
+        {/* Backdrop */}
         <Animated.View
-          style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: backdropOpacity }]}
+          style={[
+            StyleSheet.absoluteFill,
+            styles.backdrop,
+            { opacity: backdropOpacity },
+          ]}
         >
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
@@ -91,49 +124,95 @@ export default function Popup({
           />
         </Animated.View>
 
-        {/* ── Card ── */}
+        {/* Card */}
         <Animated.View
           style={[
             styles.card,
-            { opacity: cardOpacity, transform: [{ scale: cardScale }] },
+            {
+              opacity: cardOpacity,
+              transform: [{ scale: cardScale }],
+            },
             contentStyle,
           ]}
         >
-          {/* Close button */}
           {dismissable && (
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <Ionicons name="close" size={20} color={Colors.textSecondary} />
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={onClose}
+            >
+              <Ionicons
+                name="close"
+                size={20}
+                color={Colors.textSecondary}
+              />
             </TouchableOpacity>
           )}
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-            {/* Optional header icon */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
             {icon && (
-              <View style={[styles.iconCircle, { backgroundColor: iconColor + '22' }]}>
-                <Ionicons name={icon} size={32} color={iconColor} />
+              <View
+                style={[
+                  styles.iconCircle,
+                  { backgroundColor: iconColor + '22' },
+                ]}
+              >
+                <Ionicons
+                  name={icon}
+                  size={32}
+                  color={iconColor}
+                />
               </View>
             )}
 
-            {title && <Text style={styles.title}>{title}</Text>}
-            {description && <Text style={styles.description}>{description}</Text>}
+            {title && (
+              <Text style={styles.title}>
+                {title}
+              </Text>
+            )}
 
-            {/* Custom children slot */}
-            {children && <View style={styles.childrenSlot}>{children}</View>}
+            {description && (
+              <Text style={styles.description}>
+                {description}
+              </Text>
+            )}
 
-            {/* Actions */}
+            {children && (
+              <View style={styles.childrenSlot}>
+                {children}
+              </View>
+            )}
+
             {actions.length > 0 && (
-              <View style={[styles.actions, useRowActions && styles.actionsRow]}>
+              <View
+                style={[
+                  styles.actions,
+                  useRowActions && styles.actionsRow,
+                ]}
+              >
                 {actions.map((action, index) => (
-                  <Button
+                  <View
                     key={index}
-                    label={action.label}
-                    onPress={action.onPress}
-                    variant={action.variant ?? (index === 0 ? 'primary' : 'outline')}
-                    iconLeft={action.icon}
-                    fullWidth
-                    size="md"
-                    style={useRowActions ? styles.actionBtnRow : undefined}
-                  />
+                    style={
+                      useRowActions
+                        ? styles.actionWrapperRow
+                        : styles.actionWrapperColumn
+                    }
+                  >
+                    <Button
+                      label={action.label}
+                      onPress={action.onPress}
+                      variant={
+                        action.variant ??
+                        (index === 0 ? 'primary' : 'outline')
+                      }
+                      iconLeft={action.icon}
+                      fullWidth={!useRowActions}
+                      size="md"
+                    />
+                  </View>
                 ))}
               </View>
             )}
@@ -151,11 +230,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.xxl,
   },
+
   backdrop: {
     backgroundColor: 'rgba(0,0,0,0.65)',
   },
+
   card: {
     width: '100%',
+    maxWidth: 520,
     backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     borderWidth: 1,
@@ -163,6 +245,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Shadow.lg,
   },
+
   closeBtn: {
     position: 'absolute',
     top: Spacing.md,
@@ -172,11 +255,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     padding: Spacing.xs,
   },
+
   scrollContent: {
     padding: Spacing.xxl,
     alignItems: 'center',
-    gap: Spacing.md,
   },
+
   iconCircle: {
     width: 72,
     height: 72,
@@ -185,32 +269,45 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: Spacing.sm,
   },
+
   title: {
     color: Colors.text,
     fontSize: Typography.xl,
     fontWeight: '700',
     textAlign: 'center',
+    marginBottom: Spacing.sm,
   },
+
   description: {
     color: Colors.textMuted,
     fontSize: Typography.md,
     textAlign: 'center',
     lineHeight: 22,
   },
+
   childrenSlot: {
     width: '100%',
-    marginTop: Spacing.sm,
-  },
-  actions: {
-    width: '100%',
-    gap: Spacing.sm,
     marginTop: Spacing.md,
   },
+
+  actions: {
+    width: '100%',
+    marginTop: Spacing.lg,
+  },
+
   actionsRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
   },
-  actionBtnRow: {
+
+  actionWrapperRow: {
     flex: 1,
+    minWidth: 0,
+    marginHorizontal: 4,
+  },
+
+  actionWrapperColumn: {
+    width: '100%',
+    marginBottom: Spacing.sm,
   },
 });

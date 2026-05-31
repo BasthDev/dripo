@@ -1297,26 +1297,40 @@ export const usePosStore = create<PosState>()(
         })),
 
       addDiningTablesBulk: ({ baseName, count, zone }) => {
-        const base = baseName.trim();
+        const base = baseName.trim().toUpperCase();
         const qty = Math.min(Math.max(Math.floor(count), 1), 99);
-        if (!base || !zone.trim()) return 0;
+        const zoneTrim = zone.trim();
+        if (!base || !zoneTrim) return 0;
 
-        const bulkName = (index: number) => {
-          if (base.length <= 3 && !/\s/.test(base)) return `${base}${index}`;
-          return `${base} ${index}`;
-        };
-
+        let created = 0;
         set(state => {
+          const existingNames = new Set(
+            state.diningTables.map(t => t.name.trim().toUpperCase())
+          );
           const startOrder = state.diningTables.length;
-          const newTables = Array.from({ length: qty }, (_, i) => ({
-            id: uuid.v4() as string,
-            name: bulkName(i + 1),
-            zone: zone.trim(),
-            sortOrder: startOrder + i,
-          }));
+          const newTables: DiningTable[] = [];
+
+          for (let i = 1; i <= qty; i++) {
+            const name =
+              base.length <= 3 && !/\s/.test(base)
+                ? `${base}${i}`
+                : `${base} ${i}`;
+            const key = name.toUpperCase();
+            if (existingNames.has(key)) continue;
+            existingNames.add(key);
+            newTables.push({
+              id: uuid.v4() as string,
+              name,
+              zone: zoneTrim,
+              sortOrder: startOrder + newTables.length,
+            });
+            created++;
+          }
+
+          if (!newTables.length) return state;
           return { diningTables: [...state.diningTables, ...newTables] };
         });
-        return qty;
+        return created;
       },
 
       updateDiningTable: (id, updates) =>

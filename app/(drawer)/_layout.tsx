@@ -134,6 +134,32 @@ function CustomDrawerContent(props: any) {
           labelStyle={styles.drawerLabel}
         />
 
+<DrawerItem
+          label="New Order"
+          icon={({ color, size }) => (
+            <Ionicons
+              name="bag-handle-outline"
+              size={size}
+              color={color}
+            />
+          )}
+          onPress={() => go('/pos', isPosActive)}
+          focused={isPosActive}
+          activeTintColor={Colors.primary}
+          inactiveTintColor={Colors.text}
+          labelStyle={styles.drawerLabel}
+        /><DrawerItem
+        label="Tables"
+        icon={({ color, size }) => (
+          <Ionicons name="grid-outline" size={size} color={color} />
+        )}
+        onPress={() => go('/orders', isOrdersActive)}
+        focused={isOrdersActive}
+        activeTintColor={Colors.primary}
+        inactiveTintColor={Colors.text}
+        labelStyle={styles.drawerLabel}
+      />
+
         <TouchableOpacity
           style={styles.dropdownHeader}
           onPress={() =>
@@ -345,33 +371,9 @@ function CustomDrawerContent(props: any) {
 
         <View style={styles.separator} />
 
-        <DrawerItem
-          label="Tables"
-          icon={({ color, size }) => (
-            <Ionicons name="grid-outline" size={size} color={color} />
-          )}
-          onPress={() => go('/orders', isOrdersActive)}
-          focused={isOrdersActive}
-          activeTintColor={Colors.primary}
-          inactiveTintColor={Colors.text}
-          labelStyle={styles.drawerLabel}
-        />
+        
 
-        <DrawerItem
-          label="New Order"
-          icon={({ color, size }) => (
-            <Ionicons
-              name="bag-handle-outline"
-              size={size}
-              color={color}
-            />
-          )}
-          onPress={() => go('/pos', isPosActive)}
-          focused={isPosActive}
-          activeTintColor={Colors.primary}
-          inactiveTintColor={Colors.text}
-          labelStyle={styles.drawerLabel}
-        />
+        
 
         <DrawerItem
           label="Transactions"

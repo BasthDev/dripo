@@ -14,6 +14,10 @@ import {
 } from '../../../components/ui';
 import { useAppPopup } from '../../../hooks/useAppPopup';
 import { usePosStore } from '../../../store/usePosStore';
+import {
+  normalizeTableBaseName,
+  previewBulkTableNames,
+} from '../../../utils/diningTableNames';
 
 export default function ManageTablesScreen() {
   const router = useRouter();
@@ -51,31 +55,35 @@ export default function ManageTablesScreen() {
     }
 
     const created = addBulk({
-      baseName: tableBaseName.trim(),
+      baseName: normalizeTableBaseName(tableBaseName),
       count,
       zone: tableZone,
     });
 
+    const requested = count;
+    const skipped = requested - created;
+
     if (created > 0) {
       showMessage({
         title: 'Tables created',
-        description: `Added ${created} table(s) in ${tableZone}.`,
+        description:
+          skipped > 0
+            ? `Added ${created} new table(s) in ${tableZone}. ${skipped} already existed and were skipped.`
+            : `Added ${created} table(s) in ${tableZone}.`,
+      });
+    } else {
+      showMessage({
+        title: 'No new tables',
+        description: `All ${requested} name(s) for this prefix already exist.`,
+        icon: 'information-circle-outline',
+        iconColor: Colors.warning,
       });
     }
   };
 
   const previewNames = () => {
-    const base = tableBaseName.trim();
     const count = Math.min(Math.max(parseInt(tableCount, 10) || 0, 1), 99);
-    if (!base || count < 1) return '';
-    const bulkName = (index: number) => {
-      if (base.length <= 3 && !/\s/.test(base)) return `${base}${index}`;
-      return `${base} ${index}`;
-    };
-    if (count <= 3) {
-      return Array.from({ length: count }, (_, i) => bulkName(i + 1)).join(', ');
-    }
-    return `${bulkName(1)}, ${bulkName(2)}, … ${bulkName(count)}`;
+    return previewBulkTableNames(tableBaseName, count);
   };
 
   return (
@@ -133,14 +141,15 @@ export default function ManageTablesScreen() {
 
         <Text style={[styles.section, { marginTop: Spacing.xl }]}>CREATE TABLES</Text>
         <Text style={styles.hint}>
-          Enter a base name and how many tables to add. Example: name "T" × 20 → T1, T2 … T20.
-          Name "Table" × 5 → Table 1, Table 2 … Table 5.
+          Enter a base name and how many tables to add. Names are saved in UPPERCASE. Example: OD × 10 → OD1…OD10.
+          Re-running the same prefix only creates names that do not exist yet (e.g. after deleting OD2 and OD3, only those are re-added).
         </Text>
         <InputField
           label="Table name (base)"
           value={tableBaseName}
-          onChangeText={setTableBaseName}
-          placeholder="Table"
+          onChangeText={t => setTableBaseName(t.toUpperCase())}
+          placeholder="OD"
+          autoCapitalize="characters"
         />
         <InputField
           label="How many tables?"

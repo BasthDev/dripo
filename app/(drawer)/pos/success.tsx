@@ -58,6 +58,7 @@ export default function SuccessScreen() {
       <PaymentSuccessView
         data={data}
         onDone={() => router.replace(returnTo as '/pos' | '/orders')}
+        doneLabel={returnTo === '/pos' ? 'Back to POS' : 'Done'}
       />
     </View>
   );

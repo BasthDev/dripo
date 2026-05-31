@@ -11,7 +11,7 @@ import type { TableOrderLine } from '../../../store/usePosStore';
 import { usePosStore } from '../../../store/usePosStore';
 import { printReceipt } from '../../../utils/bluetoothPrinter';
 import { buildTableOrderReceiptTx, tableLinesToCart } from '../../../utils/tableOrder';
-import { TABLE_ORDER_ROUTES, type TableOrderNavFrom } from '../../../utils/tableOrderFlow';
+import { TABLE_ORDER_ROUTES, replaceAfterTableOrderSale, replaceAfterTableOrderSave, type TableSaleMode } from '../../../utils/tableOrderFlow';
 
 function parseSavedLines(raw: string | undefined): TableOrderLine[] | null {
   if (!raw) return null;
@@ -28,15 +28,19 @@ export default function TableOrderSuccessScreen() {
   const { clearCart } = useCartStore();
   const {
     orderId = '',
-    from = 'pos',
     tableId = '',
     savedLines: savedLinesParam = '',
+    saleMode = '',
+    from = 'pos',
   } = useLocalSearchParams<{
     orderId?: string;
-    from?: TableOrderNavFrom;
     tableId?: string;
     savedLines?: string;
+    saleMode?: TableSaleMode | '';
+    from?: 'orders' | 'pos';
   }>();
+
+  const returnToSale = saleMode !== 'edit';
 
   const order = usePosStore(s => s.tableOrders.find(o => o.id === orderId));
   const table = usePosStore(s => s.diningTables.find(t => t.id === (tableId || order?.tableId)));
@@ -114,20 +118,40 @@ export default function TableOrderSuccessScreen() {
 
   const handleDone = useCallback(() => {
     clearCart();
-    router.replace(TABLE_ORDER_ROUTES.pos);
-  }, [clearCart, router]);
+    const tid = tableId || order?.tableId;
+    if (returnToSale) {
+      replaceAfterTableOrderSale(router, {
+        tableId: tid || undefined,
+        navFrom: from === 'orders' ? 'orders' : 'pos',
+        saleMode: 'add',
+      });
+    } else {
+      replaceAfterTableOrderSave(router, tid || undefined);
+    }
+  }, [clearCart, router, tableId, order?.tableId, returnToSale, from]);
 
   useFocusEffect(
     useCallback(() => {
       if (!orderId) {
-        handleDone();
+        clearCart();
+        router.replace(TABLE_ORDER_ROUTES.tables);
         return;
       }
       const liveOrder = usePosStore.getState().tableOrders.find(o => o.id === orderId);
       if (!liveOrder) {
-        handleDone();
+        clearCart();
+        const tid = tableId || order?.tableId;
+        if (returnToSale) {
+          replaceAfterTableOrderSale(router, {
+            tableId: tid || undefined,
+            navFrom: from === 'orders' ? 'orders' : 'pos',
+            saleMode: 'add',
+          });
+        } else {
+          replaceAfterTableOrderSave(router, tid || undefined);
+        }
       }
-    }, [orderId, handleDone])
+    }, [orderId, tableId, order?.tableId, returnToSale, from, clearCart, router])
   );
 
   if (!orderId || !order) {
@@ -139,7 +163,7 @@ export default function TableOrderSuccessScreen() {
       <PaymentSuccessView
         data={data}
         onDone={handleDone}
-        doneLabel="Back to tables"
+        doneLabel={returnToSale ? 'Back to sale' : 'Back to table'}
         onPrint={connectedPrinter ? handlePrint : undefined}
       />
     </View>

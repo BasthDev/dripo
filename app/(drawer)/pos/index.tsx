@@ -20,9 +20,10 @@ export default function POSScreen() {
   const canAddToCart = usePosStore(state => state.canAddToCart);
   const getMaxAddable = usePosStore(state => state.getMaxAddable);
 
-  const { tableId, from } = useLocalSearchParams<{
+  const { tableId, from, mode } = useLocalSearchParams<{
     tableId?: string;
     from?: TableOrderNavFrom;
+    mode?: 'add' | 'edit';
   }>();
   const diningTables = usePosStore(state => state.diningTables);
 
@@ -31,6 +32,7 @@ export default function POSScreen() {
     addItem,
     getCartItemsForCheck,
     loadTableOrderIntoCart,
+    setTableSession,
     activeTableId,
     clearCart,
   } = useCartStore();
@@ -40,10 +42,13 @@ export default function POSScreen() {
   const activeTable = diningTables.find(t => t.id === (activeTableId ?? tableId));
 
   useEffect(() => {
-    if (tableId) {
-      loadTableOrderIntoCart(tableId);
+    if (!tableId) return;
+    if (mode === 'add') {
+      setTableSession(tableId);
+      return;
     }
-  }, [tableId, loadTableOrderIntoCart]);
+    loadTableOrderIntoCart(tableId);
+  }, [tableId, mode, loadTableOrderIntoCart, setTableSession]);
 
   const handleLeaveTableSale = useCallback(() => {
     setLeavePopupVisible(true);
@@ -120,7 +125,9 @@ export default function POSScreen() {
         title={activeTable ? `Sale · ${activeTable.name}` : 'Point of Sale'}
         subtitle={
           activeTable
-            ? `${activeTable.zone} · edit items, then save table order`
+            ? mode === 'add'
+              ? `${activeTable.zone} · add new items, then save table order`
+              : `${activeTable.zone} · edit items, then save table order`
             : undefined
         }
         onBack={isTableEdit ? handleLeaveTableSale : undefined}
@@ -266,7 +273,10 @@ export default function POSScreen() {
         {/* Right Panel: Cart (Only on Tablet) */}
         {isTablet && (
           <View style={styles.cartPanel}>
-            <CartPanel navFrom={from === 'orders' ? 'orders' : 'pos'} />
+            <CartPanel
+              navFrom={from === 'orders' ? 'orders' : 'pos'}
+              tableSaleMode={mode === 'add' || mode === 'edit' ? mode : undefined}
+            />
           </View>
         )}
       </View>
@@ -285,6 +295,7 @@ export default function POSScreen() {
                 params: {
                   from: from ?? '',
                   tableId: tableId ?? '',
+                  mode: mode ?? '',
                 },
               })
             }

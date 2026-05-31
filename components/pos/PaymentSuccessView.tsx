@@ -354,8 +354,38 @@ export default function PaymentSuccessView({
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.card, { width: '100%' }]}>
-          <SuccessHero {...heroProps} lottieSize={160} />
+          <View style={styles.lottieWrap}>
+            <LottieView
+              source={require('../../assets/lottie/Success.json')}
+              autoPlay
+              loop={false}
+              style={{ width: 160, height: 160 }}
+            />
+          </View>
+
+          <Text style={styles.title}>Order Saved</Text>
+          <Text style={styles.subtitle}>
+            {data.tableName
+              ? `Items saved to ${data.tableName}`
+              : 'Table order saved successfully'}
+          </Text>
+          <Text style={styles.tableOrderTotal}>Rp {total.toLocaleString()}</Text>
+
           <View style={styles.portraitDetailsWrap}>{detailsContent}</View>
+
+          <View style={styles.portraitDoneWrap}>
+            {onPrint ? (
+              <Button
+                label={printLabel ?? 'Print receipt'}
+                variant="outline"
+                fullWidth
+                iconLeft="print-outline"
+                onPress={onPrint}
+                style={{ marginBottom: Spacing.sm }}
+              />
+            ) : null}
+            <Button label={doneLabel} variant="primary" fullWidth onPress={onDone} />
+          </View>
         </View>
       </ScrollView>
     );

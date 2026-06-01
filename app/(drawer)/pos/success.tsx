@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
+import { usePreventScreenBack } from '../../../hooks/usePreventScreenBack';
 import { StyleSheet, View } from 'react-native';
 import PaymentSuccessView, {
   type PaymentSuccessData,
@@ -10,6 +11,7 @@ import { usePosStore } from '../../../store/usePosStore';
 
 export default function SuccessScreen() {
   const router = useRouter();
+  usePreventScreenBack(true);
   const { clearCart } = useCartStore();
   const {
     total = '0',

@@ -1,14 +1,12 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
-import PaymentSuccessView, {
-  type PaymentSuccessData,
-  type TableOrderLineSummary,
-} from '../../../components/pos/PaymentSuccessView';
+import TableOrderSuccessView from '../../../components/pos/TableOrderSuccessView';
 import { Colors } from '../../../components/ui';
 import { getCartLineUnitPrice, useCartStore } from '../../../store/useCartStore';
 import type { TableOrderLine } from '../../../store/usePosStore';
 import { usePosStore } from '../../../store/usePosStore';
+import { usePreventScreenBack } from '../../../hooks/usePreventScreenBack';
 import { dispatchTableKitchenReprint, hasAnyPrinterConfigured } from '../../../utils/printerRouting';
 import { tableLinesToCart } from '../../../utils/tableOrder';
 import { TABLE_ORDER_ROUTES, replaceAfterTableOrderSave } from '../../../utils/tableOrderFlow';
@@ -36,10 +34,11 @@ export default function TableOrderSuccessScreen() {
     savedLines?: string;
   }>();
 
+  usePreventScreenBack(true);
+
   const order = usePosStore(s => s.tableOrders.find(o => o.id === orderId));
   const table = usePosStore(s => s.diningTables.find(t => t.id === (tableId || order?.tableId)));
   const products = usePosStore(s => s.products);
-  const categories = usePosStore(s => s.categories);
   const modifiers = usePosStore(s => s.modifiers);
 
   const savedLines = useMemo(
@@ -53,43 +52,13 @@ export default function TableOrderSuccessScreen() {
     return tableLinesToCart(lines, products);
   }, [savedLines, order?.lines, products]);
 
-  const lineItems: TableOrderLineSummary[] = useMemo(
-    () =>
-      displayItems.map(item => ({
-        name: item.product.name,
-        quantity: item.quantity,
-        lineTotal: getCartLineUnitPrice(item) * item.quantity,
-        note: item.note,
-      })),
-    [displayItems]
-  );
-
   const total = useMemo(
-    () => lineItems.reduce((s, l) => s + l.lineTotal, 0),
-    [lineItems]
-  );
-
-  const itemsCount = useMemo(
-    () => displayItems.reduce((s, i) => s + i.quantity, 0),
+    () =>
+      displayItems.reduce(
+        (s, item) => s + getCartLineUnitPrice(item) * item.quantity,
+        0
+      ),
     [displayItems]
-  );
-
-  const data: PaymentSuccessData = useMemo(
-    () => ({
-      mode: 'tableOrder',
-      txId: orderId,
-      timestamp: order?.updatedAt ?? new Date().toISOString(),
-      total,
-      change: 0,
-      itemsCount,
-      method: 'TABLE ORDER',
-      orderNote: order?.orderNote,
-      tableName: table?.name,
-      tableZone: table?.zone,
-      documentNo: order?.documentNo,
-      lineItems,
-    }),
-    [order, orderId, table, total, itemsCount, lineItems]
   );
 
   const handlePrint = useCallback(() => {
@@ -135,8 +104,17 @@ export default function TableOrderSuccessScreen() {
 
   return (
     <View style={styles.container}>
-      <PaymentSuccessView
-        data={data}
+      <TableOrderSuccessView
+        info={{
+          tableName: table?.name,
+          tableZone: table?.zone,
+          documentNo: order.documentNo,
+          orderNote: order.orderNote,
+          total,
+          timestamp: order.updatedAt ?? new Date().toISOString(),
+        }}
+        items={displayItems}
+        modifiers={modifiers}
         onDone={handleDone}
         doneLabel="Back to table"
         onPrint={hasAnyPrinterConfigured() ? handlePrint : undefined}

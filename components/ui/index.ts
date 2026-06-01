@@ -1,6 +1,6 @@
 // Dripo UI Component Library
 export { default as Button } from './Button';
-export type { ButtonVariant, ButtonSize } from './Button';
+export type { ButtonSize, ButtonVariant } from './Button';
 
 export { default as InputField } from './InputField';
 
@@ -25,4 +25,7 @@ export type { DocumentBadgeVariant } from './DocumentBadge';
 
 export { default as OnOffToggle } from './OnOffToggle';
 
-export { Colors, Spacing, Radius, Typography, Shadow } from './theme';
+export { Colors, Radius, Shadow, Spacing, Typography } from './theme';
+
+export { splitPanel60_40 } from './splitHalf';
+

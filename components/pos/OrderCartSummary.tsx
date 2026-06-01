@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { FlatList, StyleSheet, Text, View, ViewStyle } from 'react-native';
-import { Colors, Spacing, Typography } from '../ui';
 import { CartItem, getCartLineUnitPrice } from '../../store/useCartStore';
 import type { ProductModifier } from '../../store/usePosStore';
+import { Colors, Spacing, Typography } from '../ui';
 
 type Props = {
   items: CartItem[];

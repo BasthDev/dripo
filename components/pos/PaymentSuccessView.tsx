@@ -1,11 +1,11 @@
 import LottieView from 'lottie-react-native';
 import React, { useRef } from 'react';
 import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
+    ScrollView,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Colors, Radius, Shadow, Spacing, Typography } from '../ui';

@@ -1,11 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useMemo } from 'react';
 import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
+    ScrollView,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
 } from 'react-native';
 import OrderCartSummary from '../../../components/pos/OrderCartSummary';
 import { Button, Colors, Header, Radius, Spacing, Typography } from '../../../components/ui';
@@ -13,15 +13,15 @@ import { useAppPopup } from '../../../hooks/useAppPopup';
 import { getCartLineUnitPrice } from '../../../store/useCartStore';
 import { usePosStore } from '../../../store/usePosStore';
 import {
-  dispatchTableKitchenReprint,
-  hasAnyPrinterConfigured,
+    dispatchTableKitchenReprint,
+    hasAnyPrinterConfigured,
 } from '../../../utils/printerRouting';
 import { tableLinesToCart } from '../../../utils/tableOrder';
 import {
-  navigateToAddTableItems,
-  navigateToEditTable,
-  navigateToPayTable,
-  TABLE_ORDER_ROUTES,
+    navigateToAddTableItems,
+    navigateToEditTable,
+    navigateToPayTable,
+    TABLE_ORDER_ROUTES,
 } from '../../../utils/tableOrderFlow';
 
 export default function TableOrderDetailScreen() {

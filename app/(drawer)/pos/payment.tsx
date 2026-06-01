@@ -22,8 +22,10 @@ import {
   InputField,
   Radius,
   Spacing,
+  splitPanel60_40,
   Typography,
 } from '../../../components/ui';
+import { usePreventScreenBack } from '../../../hooks/usePreventScreenBack';
 import { useCartStore } from '../../../store/useCartStore';
 import { usePosStore } from '../../../store/usePosStore';
 import {
@@ -93,6 +95,8 @@ export default function PaymentScreen() {
 
   const canPay = method !== 'CASH' || cashParsed >= total;
 
+  usePreventScreenBack(paymentComplete);
+
   const isLandscape = width > height;
   const isTablet = width >= 768;
   const showSplit = isLandscape || isTablet;
@@ -121,6 +125,18 @@ export default function PaymentScreen() {
     setCompletedTableId(null);
     setCompletedReceiptTx(null);
     router.replace('/pos');
+  };
+
+  const renderPaymentSuccess = () => {
+    if (!successData) return null;
+    return (
+      <PaymentSuccessPanel
+        data={successData}
+        onDone={handleDone}
+        doneLabel="Back to POS"
+        onPrint={canPrint && completedReceiptTx ? handleReprint : undefined}
+      />
+    );
   };
 
   const handleReprint = async () => {
@@ -414,34 +430,22 @@ export default function PaymentScreen() {
         <View
           style={[
             styles.paymentPanel,
-            showSplit && {
-              flex: 1.2,
-            },
+            showSplit && splitPanel60_40.left,
           ]}
         >
-          <Header
-            title={paymentComplete ? 'Payment successful' : 'Payment'}
-            onBack={paymentComplete ? undefined : handlePaymentBack}
-          />
+          {!paymentComplete ? (
+            <Header title="Payment" onBack={handlePaymentBack} />
+          ) : null}
 
-          {paymentComplete && successData ? (
-            <PaymentSuccessPanel
-              data={successData}
-              onDone={handleDone}
-              doneLabel="Back to POS"
-              onPrint={canPrint && completedReceiptTx ? handleReprint : undefined}
-            />
-          ) : (
-            renderPaymentForm()
-          )}
+          {paymentComplete ? renderPaymentSuccess() : renderPaymentForm()}
         </View>
 
         {showSplit && (
           <View
             style={[
               styles.rightPanel,
+              splitPanel60_40.right,
               {
-                flex: 1,
                 borderLeftWidth: 1,
                 borderLeftColor: Colors.surfaceBorder,
               },
@@ -483,7 +487,6 @@ const styles = StyleSheet.create({
   },
 
   rightPanel: {
-    flex: 1,
     backgroundColor: Colors.surface,
   },
 

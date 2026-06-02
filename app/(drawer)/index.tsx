@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors, Header, Radius, Spacing, Typography } from '../../components/ui';
+import ScaledRpText from '../../components/ui/ScaledRpText';
 import { usePosStore } from '../../store/usePosStore';
 import { computeTodayStats } from '../../utils/salesAnalytics';
 
@@ -78,14 +79,21 @@ export default function DashboardScreen() {
           <View style={styles.heroMainRow}>
             <View style={styles.heroMainStat}>
               <Text style={styles.heroMainLabel}>Net Revenue</Text>
-              <Text style={styles.heroMainValue}>Rp {today.revenue.toLocaleString()}</Text>
+              <ScaledRpText
+                amount={today.revenue}
+                baseFontSize={Typography.xxl}
+                style={styles.heroMainValue}
+              />
             </View>
             <View style={styles.heroMainDivider} />
             <View style={styles.heroMainStat}>
               <Text style={styles.heroMainLabel}>Gross Profit</Text>
-              <Text style={[styles.heroMainValue, { color: '#C8F0CA' }]}>
-                Rp {today.profit.toLocaleString()}
-              </Text>
+              <ScaledRpText
+                amount={today.profit}
+                baseFontSize={Typography.xxl}
+                color="#C8F0CA"
+                style={styles.heroMainValue}
+              />
             </View>
           </View>
 
@@ -135,7 +143,7 @@ export default function DashboardScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Top Selling Today</Text>
-          <TouchableOpacity onPress={() => router.push('/reports/top-products')}>
+          <TouchableOpacity onPress={() => router.push('/(drawer)/reports/top-products')}>
             <Text style={styles.sectionLink}>View All</Text>
           </TouchableOpacity>
         </View>
@@ -242,9 +250,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.lg,
   },
-  heroMainStat: { flex: 1 },
+  heroMainStat: { flex: 1, minWidth: 0 },
   heroMainLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '600', marginBottom: 4 },
-  heroMainValue: { color: '#FFF', fontSize: Typography.xxl, fontWeight: '800' },
+  heroMainValue: { color: '#FFF' },
   heroMainDivider: { width: 1, height: 48, backgroundColor: 'rgba(255,255,255,0.2)' },
   heroDetailGrid: {
     flexDirection: 'row',

@@ -4,13 +4,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDeviceLayout } from '../../hooks/useDeviceLayout';
 import type { CartItem } from '../../store/useCartStore';
+import { getCartLineUnitPrice } from '../../store/useCartStore';
 import type { ProductModifier } from '../../store/usePosStore';
-import { Button, Colors, Radius, Spacing, splitPanel60_40, Typography } from '../ui';
+import { Button, Colors, Radius, Shadow, Spacing, splitPanel60_40, Typography } from '../ui';
 import OrderCartSummary from './OrderCartSummary';
 
 export type TableOrderSuccessInfo = {
@@ -33,9 +34,9 @@ type Props = {
 
 function TableMetaRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.metaRow}>
-      <Text style={styles.metaLabel}>{label}</Text>
-      <Text style={styles.metaValue} numberOfLines={2}>
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue} numberOfLines={2}>
         {value}
       </Text>
     </View>
@@ -122,7 +123,48 @@ function SuccessLeftPanel({
   );
 }
 
-/** Table save success — split: left status, right added items (not payment UI). */
+function PortraitItemsBlock({
+  items,
+  modifiers,
+}: {
+  items: CartItem[];
+  modifiers: ProductModifier[];
+}) {
+  return (
+    <View style={styles.itemsBlock}>
+      <Text style={styles.sectionLabel}>ITEMS SAVED</Text>
+      <View style={styles.detailsBox}>
+        {items.map((item, idx) => {
+          const unit = getCartLineUnitPrice(item);
+          const lineTotal = unit * item.quantity;
+          const modNames = (item.modifierIds ?? [])
+            .map(id => modifiers.find(m => m.id === id)?.name)
+            .filter(Boolean);
+          return (
+            <View key={item.cartItemId}>
+              {idx > 0 ? <View style={styles.metaDivider} /> : null}
+              <View style={styles.itemLineRow}>
+                <View style={styles.itemLineLeft}>
+                  <Text style={styles.itemLineName}>
+                    {item.quantity}× {item.product.name}
+                  </Text>
+                  {modNames.length ? (
+                    <Text style={styles.itemLineSub}>{modNames.join(', ')}</Text>
+                  ) : null}
+                </View>
+                <Text style={styles.itemLinePrice}>
+                  Rp {lineTotal.toLocaleString()}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/** Table save success — split on tablet; card layout on phone (matches payment success). */
 export default function TableOrderSuccessView({
   info,
   items,
@@ -132,11 +174,21 @@ export default function TableOrderSuccessView({
   onPrint,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
-  const showSplit = width >= 600 || width > height;
+  const { isSplitLayout } = useDeviceLayout();
   const total = info.total;
 
-  if (showSplit) {
+  const paidAt = new Date(info.timestamp || Date.now());
+  const timeStr = paidAt.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const dateStr = paidAt.toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+
+  if (isSplitLayout) {
     return (
       <View
         style={[
@@ -172,57 +224,95 @@ export default function TableOrderSuccessView({
   }
 
   return (
-    <View
-      style={[
-        styles.portraitRoot,
-        { paddingTop: insets.top, paddingBottom: insets.bottom },
+    <ScrollView
+      contentContainerStyle={[
+        styles.scroll,
+        {
+          paddingTop: insets.top + Spacing.lg,
+          paddingBottom: insets.bottom + Spacing.lg,
+        },
       ]}
+      showsVerticalScrollIndicator={false}
     >
-      <ScrollView
-        contentContainerStyle={styles.portraitScroll}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.hero}>
+      <View style={styles.card}>
+        <View style={styles.lottieWrap}>
           <LottieView
             source={require('../../assets/lottie/Success.json')}
             autoPlay
             loop={false}
-            style={{ width: 130, height: 130 }}
+            style={{ width: 160, height: 160 }}
           />
-          <Text style={styles.title}>Order Saved</Text>
-          <Text style={styles.subtitle}>
-            {info.tableName
-              ? `Items added to ${info.tableName}`
-              : 'Items saved to table'}
-          </Text>
-          <Text style={styles.total}>Rp {total.toLocaleString()}</Text>
         </View>
 
-        <OrderCartSummary
-          items={items}
-          modifiers={modifiers}
-          total={total}
-          title="Items added"
-        />
-      </ScrollView>
+        <Text style={styles.title}>Order Saved</Text>
+        <Text style={styles.subtitle}>
+          {info.tableName
+            ? `Items added to ${info.tableName}`
+            : 'Items saved to table'}
+        </Text>
+        <Text style={styles.total}>Rp {total.toLocaleString()}</Text>
 
-      <View style={styles.portraitFooter}>
-        {onPrint ? (
-          <Button
-            label="Reprint kitchen"
-            variant="outline"
-            fullWidth
-            iconLeft="print-outline"
-            onPress={onPrint}
-          />
-        ) : null}
-        <Button label={doneLabel} variant="primary" fullWidth onPress={onDone} />
+        <View style={styles.portraitDetailsWrap}>
+          <Text style={styles.sectionLabel}>DETAILS</Text>
+          <View style={styles.detailsBox}>
+            <TableMetaRow label="Table" value={info.tableName ?? '—'} />
+            <View style={styles.metaDivider} />
+            <TableMetaRow label="Area" value={info.tableZone ?? '—'} />
+            <View style={styles.metaDivider} />
+            <TableMetaRow label="Order No." value={info.documentNo ?? '—'} />
+            <View style={styles.metaDivider} />
+            <TableMetaRow label="Time" value={`${dateStr} · ${timeStr}`} />
+            {info.orderNote ? (
+              <>
+                <View style={styles.metaDivider} />
+                <TableMetaRow label="Note" value={info.orderNote} />
+              </>
+            ) : null}
+          </View>
+
+          <PortraitItemsBlock items={items} modifiers={modifiers} />
+        </View>
+
+        <View style={styles.portraitDoneWrap}>
+          {onPrint ? (
+            <Button
+              label="Reprint kitchen"
+              variant="outline"
+              fullWidth
+              iconLeft="print-outline"
+              onPress={onPrint}
+              style={{ marginBottom: Spacing.sm }}
+            />
+          ) : null}
+          <Button label={doneLabel} variant="primary" fullWidth onPress={onDone} />
+        </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+    backgroundColor: Colors.background,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 480,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    ...Shadow.md,
+  },
+  lottieWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   splitRoot: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -259,21 +349,6 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.surfaceBorder,
     backgroundColor: Colors.background,
   },
-  portraitRoot: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  portraitScroll: {
-    padding: Spacing.lg,
-    gap: Spacing.lg,
-    paddingBottom: Spacing.xl,
-  },
-  portraitFooter: {
-    padding: Spacing.lg,
-    gap: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.surfaceBorder,
-  },
   hero: {
     alignItems: 'center',
     gap: Spacing.sm,
@@ -294,7 +369,36 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: Typography.xl,
     fontWeight: '800',
+    textAlign: 'center',
     marginTop: Spacing.xs,
+  },
+  portraitDetailsWrap: {
+    width: '100%',
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.md,
+    gap: Spacing.md,
+  },
+  portraitDoneWrap: {
+    width: '100%',
+    marginTop: Spacing.lg,
+    paddingTop: Spacing.xl,
+  },
+  sectionLabel: {
+    alignSelf: 'stretch',
+    color: Colors.textMuted,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: Spacing.sm,
+  },
+  detailsBox: {
+    alignSelf: 'stretch',
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
   },
   metaBox: {
     backgroundColor: Colors.surface,
@@ -304,19 +408,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.xs,
   },
-  metaRow: {
+  detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: Spacing.md,
     paddingVertical: Spacing.md,
   },
-  metaLabel: {
+  detailLabel: {
     color: Colors.textSecondary,
     fontSize: Typography.sm,
     flex: 1,
   },
-  metaValue: {
+  detailValue: {
     color: Colors.text,
     fontSize: Typography.sm,
     fontWeight: '600',
@@ -326,5 +430,32 @@ const styles = StyleSheet.create({
   metaDivider: {
     height: 1,
     backgroundColor: Colors.surfaceBorder,
+  },
+  itemsBlock: {
+    alignSelf: 'stretch',
+    marginTop: Spacing.sm,
+  },
+  itemLineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  itemLineLeft: { flex: 1 },
+  itemLineName: {
+    color: Colors.text,
+    fontSize: Typography.sm,
+    fontWeight: '600',
+  },
+  itemLineSub: {
+    color: Colors.textMuted,
+    fontSize: Typography.xs,
+    marginTop: 2,
+  },
+  itemLinePrice: {
+    color: Colors.text,
+    fontSize: Typography.sm,
+    fontWeight: '700',
   },
 });

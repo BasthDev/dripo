@@ -9,6 +9,7 @@ import {
   requestOutletOtp,
   verifyOutletOtp,
 } from '../services/deviceActivationApi';
+import { DEVICE_ACTIVATION_ENABLED } from '../utils/activationConfig';
 import { getOrCreateDeviceId } from '../utils/deviceId';
 
 export interface DeviceSession {
@@ -41,7 +42,8 @@ export const useActivationStore = create<ActivationState>()(
       _hasHydrated: false,
       setHasHydrated: v => set({ _hasHydrated: v }),
 
-      isLicensed: () => !!get().session?.sessionToken,
+      isLicensed: () =>
+        !DEVICE_ACTIVATION_ENABLED || !!get().session?.sessionToken,
 
       requestOtp: async outletId => {
         if (!isActivationApiConfigured()) {

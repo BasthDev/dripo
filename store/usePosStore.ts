@@ -86,29 +86,31 @@ export interface PrinterDevice {
 
 export interface PrinterStation {
   id: PrinterStationId;
+  /** @deprecated Fixed label from station id — use getStationLabel() */
   label: string;
   /** Master switch — station ignored when false */
   enabled: boolean;
   device: PrinterDevice | null;
   /** Assigned product category ids — station prints nothing until at least one is set */
   categoryIds: string[];
-  /** First save on empty table — kitchen slip with all items */
-  printOnTableFirstOrder: boolean;
-  /** Save more items to open table — kitchen slip with new items only */
-  printOnTableAddItems: boolean;
-  /** Checkout — full customer receipt (logo, totals, etc.) */
+  /** Bar/Kitchen — minimal order slip when saving items to a table */
+  printOnTableOrder: boolean;
+  /** Cashier — minimal checker slip when saving items to a table */
+  printOnTableChecker: boolean;
+  /** Cashier — full customer receipt at payment */
   printOnPayment: boolean;
 }
 
 export function createDefaultPrinterStations(): PrinterStation[] {
+  const labels = ['Cashier', 'Bar', 'Kitchen'] as const;
   return PRINTER_STATION_IDS.map((id, i) => ({
     id,
-    label: i === 0 ? 'Cashier' : i === 1 ? 'Kitchen' : 'Bar',
+    label: labels[i],
     enabled: false,
     device: null,
     categoryIds: [],
-    printOnTableFirstOrder: i === 1 || i === 2,
-    printOnTableAddItems: i === 1 || i === 2,
+    printOnTableOrder: i === 1 || i === 2,
+    printOnTableChecker: false,
     printOnPayment: i === 0,
   }));
 }
@@ -1529,7 +1531,7 @@ export const usePosStore = create<PosState>()(
     {
       name: 'pos-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 10,
+      version: 12,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as {
           categories?: { id: string; name: string; color?: string }[];
@@ -1571,6 +1573,8 @@ export const usePosStore = create<PosState>()(
               printOnAddItem?: boolean;
               printOnTableOrder?: boolean;
               printOnPosAddItem?: boolean;
+              printOnTableFirstOrder?: boolean;
+              printOnTableAddItems?: boolean;
             };
             const labelLooksGeneric =
               /^printer\s*[-_]?\s*\d+$/i.test(legacy.label.trim()) ||
@@ -1584,10 +1588,56 @@ export const usePosStore = create<PosState>()(
               enabled: legacy.enabled,
               device: legacy.device,
               categoryIds: legacy.categoryIds ?? [],
-              printOnTableFirstOrder:
-                legacy.printOnTableFirstOrder ?? legacy.printOnTableOrder ?? false,
-              printOnTableAddItems:
-                legacy.printOnTableAddItems ?? legacy.printOnAddItem ?? false,
+              printOnTableOrder:
+                legacy.printOnTableOrder ??
+                legacy.printOnTableFirstOrder ??
+                legacy.printOnTableAddItems ??
+                legacy.printOnAddItem ??
+                false,
+              printOnPayment: legacy.printOnPayment ?? false,
+            };
+          });
+        }
+        if (version < 11 && state.printerStations) {
+          const fixedLabels = ['Cashier', 'Bar', 'Kitchen'] as const;
+          state.printerStations = state.printerStations.map((s, i) => {
+            const legacy = s as PrinterStation & {
+              printOnTableFirstOrder?: boolean;
+              printOnTableAddItems?: boolean;
+            };
+            return {
+              id: legacy.id,
+              label: fixedLabels[i] ?? legacy.label,
+              enabled: legacy.enabled,
+              device: legacy.device,
+              categoryIds: legacy.categoryIds ?? [],
+              printOnTableOrder:
+                legacy.printOnTableOrder ??
+                legacy.printOnTableFirstOrder ??
+                legacy.printOnTableAddItems ??
+                false,
+              printOnTableChecker: false,
+              printOnPayment: legacy.printOnPayment ?? false,
+            };
+          });
+        }
+        if (version < 12 && state.printerStations) {
+          const fixedLabels = ['Cashier', 'Bar', 'Kitchen'] as const;
+          state.printerStations = state.printerStations.map((s, i) => {
+            const legacy = s as PrinterStation & { printOnTableChecker?: boolean };
+            const isCashier = i === 0;
+            return {
+              id: legacy.id,
+              label: fixedLabels[i] ?? legacy.label,
+              enabled: legacy.enabled,
+              device: legacy.device,
+              categoryIds: legacy.categoryIds ?? [],
+              printOnTableOrder: isCashier
+                ? false
+                : (legacy.printOnTableOrder ?? false),
+              printOnTableChecker:
+                legacy.printOnTableChecker ??
+                (isCashier ? legacy.printOnTableOrder ?? false : false),
               printOnPayment: legacy.printOnPayment ?? false,
             };
           });

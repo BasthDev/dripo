@@ -1,6 +1,7 @@
 import { PermissionsAndroid, Platform, type Permission } from 'react-native';
 
 import { readLogoBase64 } from './storeLogo';
+import { formatPrintTxId } from './printerStation';
 
 export type BluetoothReadyResult = {
   ready: boolean;
@@ -254,17 +255,15 @@ export type ReceiptPrintOptions = {
 export type KitchenTicketLine = {
   name: string;
   quantity: number;
-  note?: string;
   modifiers?: string[];
-  categoryName?: string;
 };
 
 export type KitchenTicketPayload = {
-  title?: string;
+  /** BAR or KITCHEN — printed at top of slip */
+  stationLabel: string;
+  orderId: string;
   tableName?: string;
   zone?: string;
-  documentNo?: string;
-  orderNote?: string;
   lines: KitchenTicketLine[];
   timestamp?: string;
 };
@@ -283,11 +282,10 @@ export async function printReceiptOnDevice(
 export async function printKitchenTicketOnDevice(
   address: string,
   ticket: KitchenTicketPayload,
-  storeSettings: any,
-  options?: { stationLabel?: string }
+  storeSettings: any
 ): Promise<boolean> {
   return withPrinterConnection(address, () =>
-    printKitchenTicketBody(ticket, storeSettings, options)
+    printKitchenTicketBody(ticket, storeSettings)
   );
 }
 
@@ -300,11 +298,10 @@ export async function printReceipt(tx: any, storeSettings: any): Promise<boolean
   return printReceiptBody(tx, storeSettings);
 }
 
-/** Kitchen / bar — minimal slip: table, order id, time, items only. */
+/** Bar / Kitchen — minimal order slip (no store header, no totals, no notes). */
 async function printKitchenTicketBody(
   ticket: KitchenTicketPayload,
-  _storeSettings: any,
-  _options?: { stationLabel?: string }
+  _storeSettings: any
 ): Promise<boolean> {
   if (!isNativeSupported) {
     console.log('[BluetoothPrinter] (Demo Kitchen)\n', ticket);
@@ -312,27 +309,26 @@ async function printKitchenTicketBody(
   }
 
   try {
-    const dateStr = ticket.timestamp
-      ? new Date(ticket.timestamp).toLocaleString()
-      : new Date().toLocaleString();
+    const paidAt = ticket.timestamp ? new Date(ticket.timestamp) : new Date();
+    const dateStr = paidAt.toLocaleDateString();
+    const timeStr = paidAt.toLocaleTimeString();
 
     await BluetoothEscposPrinter.printerAlign(BluetoothEscposPrinter.ALIGN.CENTER);
-    if (ticket.tableName) {
-      const zone = ticket.zone ? ` · ${ticket.zone}` : '';
-      await BluetoothEscposPrinter.printText(
-        `TABLE ${ticket.tableName}${zone}\n`,
-        { widthtimes: 2, heigthtimes: 2, fonttype: 2 }
-      );
-    }
+    await BluetoothEscposPrinter.printText(
+      `${ticket.stationLabel.toUpperCase()}\n`,
+      { widthtimes: 2, heigthtimes: 2, fonttype: 2 }
+    );
     await BluetoothEscposPrinter.printText('--------------------------------\n', {});
 
     await BluetoothEscposPrinter.printerAlign(BluetoothEscposPrinter.ALIGN.LEFT);
-    if (ticket.documentNo) {
-      await BluetoothEscposPrinter.printText(`Order: ${ticket.documentNo}\n`, {});
-    }
-    await BluetoothEscposPrinter.printText(`Time: ${dateStr}\n`, {});
-    if (ticket.orderNote?.trim()) {
-      await BluetoothEscposPrinter.printText(`Note: ${ticket.orderNote.trim()}\n`, {});
+    await BluetoothEscposPrinter.printText(
+      `ID: #${formatPrintTxId(ticket.orderId)}\n`,
+      {}
+    );
+    await BluetoothEscposPrinter.printText(`Date: ${dateStr}, ${timeStr}\n`, {});
+    if (ticket.tableName) {
+      const zone = ticket.zone ? ` (${ticket.zone})` : '';
+      await BluetoothEscposPrinter.printText(`Table: ${ticket.tableName}${zone}\n`, {});
     }
     await BluetoothEscposPrinter.printText('--------------------------------\n', {});
 
@@ -343,9 +339,6 @@ async function printKitchenTicketBody(
       );
       for (const mod of line.modifiers ?? []) {
         await BluetoothEscposPrinter.printText(`   + ${mod}\n`, {});
-      }
-      if (line.note?.trim()) {
-        await BluetoothEscposPrinter.printText(`   * ${line.note.trim()}\n`, {});
       }
     }
 
@@ -410,14 +403,11 @@ async function printReceiptBody(
     // 2. Align left for receipt metadata
     await BluetoothEscposPrinter.printerAlign(BluetoothEscposPrinter.ALIGN.LEFT);
     const dateStr = tx.timestamp ? new Date(tx.timestamp).toLocaleString() : new Date().toLocaleString();
-    await BluetoothEscposPrinter.printText(`ID: #${tx.id.substring(0, 6).toUpperCase()}\n`, {});
+    await BluetoothEscposPrinter.printText(`ID: #${formatPrintTxId(tx.id)}\n`, {});
     await BluetoothEscposPrinter.printText(`Date: ${dateStr}\n`, {});
     if (tx.tableName) {
       const zone = tx.zone ? ` (${tx.zone})` : '';
       await BluetoothEscposPrinter.printText(`Table: ${tx.tableName}${zone}\n`, {});
-    }
-    if (tx.documentNo) {
-      await BluetoothEscposPrinter.printText(`Order: ${tx.documentNo}\n`, {});
     }
     if (tx.paymentMethod) {
       await BluetoothEscposPrinter.printText(`Payment: ${tx.paymentMethod}\n`, {});

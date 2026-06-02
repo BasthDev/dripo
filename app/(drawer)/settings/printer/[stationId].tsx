@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
@@ -32,14 +31,16 @@ import {
   scanBluetoothDevices,
 } from '../../../../utils/bluetoothPrinter';
 import { enqueuePrint } from '../../../../utils/printQueue';
-import { stationReadyToPrint } from '../../../../utils/printerStation';
+import {
+  categoryPickerHint,
+  getStationLabel,
+  getStationRole,
+  isCashierStation,
+  stationReadyToPrint,
+} from '../../../../utils/printerStation';
 
 function getStationTestPreviewMode(station: PrinterStation): ReceiptPreviewMode {
-  if (
-    station.printOnPayment &&
-    !station.printOnTableFirstOrder &&
-    !station.printOnTableAddItems
-  ) {
+  if (isCashierStation(station) && station.printOnPayment && !station.printOnTableChecker) {
     return 'payment';
   }
   return 'kitchen';
@@ -98,6 +99,9 @@ export default function PrinterStationScreen() {
 
   const ready = stationReadyToPrint(station);
   const testPreviewMode = getStationTestPreviewMode(station);
+  const stationLabel = getStationLabel(station);
+  const stationRole = getStationRole(station);
+  const cashier = isCashierStation(station);
 
   const handleConnect = async (device: BluetoothScanResult) => {
     setConnectingAddress(device.address);
@@ -149,14 +153,15 @@ export default function PrinterStationScreen() {
     const printDelay = mode === 'payment' ? 2200 : 1400;
     await new Promise(r => setTimeout(r, printDelay));
 
-    enqueuePrint(station.label, async () => {
+    enqueuePrint(stationLabel, async () => {
       if (mode === 'kitchen') {
         await printKitchenTicketOnDevice(
           station.device!.address,
           {
+            stationLabel,
+            orderId: 'test-order-id',
             tableName: '5',
             zone: 'Hall',
-            documentNo: 'TO-0001',
             timestamp: new Date().toISOString(),
             lines: [
               { name: 'Latte', quantity: 2, modifiers: ['Oat milk'] },
@@ -169,7 +174,7 @@ export default function PrinterStationScreen() {
         await printReceiptOnDevice(
           station.device!.address,
           {
-            id: 'TEST',
+            id: 'test-order-id',
             timestamp: new Date().toISOString(),
             paymentMethod: 'CASH',
             totalAmount: 63000,
@@ -178,7 +183,7 @@ export default function PrinterStationScreen() {
               { name: 'Croissant', quantity: 1, sellPrice: 28000 },
             ],
             tableName: '5',
-            documentNo: 'TO-0001',
+            zone: 'Hall',
           },
           storeSettings
         );
@@ -241,13 +246,12 @@ export default function PrinterStationScreen() {
       contentContainerStyle={styles.configContent}
       keyboardShouldPersistTaps="handled"
     >
-      <TextInput
-        style={styles.nameInput}
-        value={station.label}
-        onChangeText={label => updatePrinterStation(stationId, { label })}
-        placeholder="Name (Kitchen, Bar, Cashier…)"
-        placeholderTextColor={Colors.textMuted}
-      />
+      <Text style={styles.stationName}>{stationLabel}</Text>
+      <Text style={styles.stationRole}>
+        {cashier
+          ? 'Checker slip or full payment receipt — configure below'
+          : 'Short order slip — items only, no prices'}
+      </Text>
 
       <View style={styles.enableRow}>
         <Text style={styles.enableLabel}>Printer active</Text>
@@ -261,10 +265,11 @@ export default function PrinterStationScreen() {
             : 'Choose categories below to enable printing.'}
         </Text>
       ) : (
-        <Text style={styles.statusOk}>Ready — prints as “{station.label}”</Text>
+        <Text style={styles.statusOk}>Ready — {stationLabel}</Text>
       )}
 
       <PanelTitle icon="grid-outline" title="Categories" />
+      <Text style={styles.categoryHint}>{categoryPickerHint(stationRole)}</Text>
       <PrinterCategoryPicker
         categories={categories}
         selectedIds={station.categoryIds}
@@ -278,25 +283,38 @@ export default function PrinterStationScreen() {
 
       <PanelTitle icon="options-outline" title="When to print" />
       <View style={styles.optionBox}>
-        <PrinterOptionRow
-          title="Save table order"
-          description="First order on empty table — short slip with all items"
-          value={station.printOnTableFirstOrder}
-          onChange={v => updatePrinterStation(stationId, { printOnTableFirstOrder: v })}
-        />
-        <PrinterOptionRow
-          title="Add items to table"
-          description="Only new items when saving more to the same table"
-          value={station.printOnTableAddItems}
-          onChange={v => updatePrinterStation(stationId, { printOnTableAddItems: v })}
-        />
-        <PrinterOptionRow
-          title="Payment"
-          description="Full receipt (store logo, totals) — cashier"
-          value={station.printOnPayment}
-          onChange={v => updatePrinterStation(stationId, { printOnPayment: v })}
-          isLast
-        />
+        {cashier ? (
+          <>
+            <PrinterOptionRow
+              title="Table checker slip"
+              description="Minimal slip when saving to a table — verify items received (no prices)"
+              value={station.printOnTableChecker}
+              onChange={v => updatePrinterStation(stationId, { printOnTableChecker: v })}
+            />
+            <PrinterOptionRow
+              title="Payment"
+              description="Full receipt with logo, totals, and change at checkout"
+              value={station.printOnPayment}
+              onChange={v => updatePrinterStation(stationId, { printOnPayment: v })}
+              isLast
+            />
+          </>
+        ) : (
+          <>
+            <PrinterOptionRow
+              title="Add to table"
+              description="Print order slip every time items are saved to a table"
+              value={station.printOnTableOrder}
+              onChange={v => updatePrinterStation(stationId, { printOnTableOrder: v })}
+              isLast
+            />
+            <View style={styles.paymentNaBox}>
+              <Text style={styles.paymentNaText}>
+                Payment receipts print on Cashier only.
+              </Text>
+            </View>
+          </>
+        )}
       </View>
 
       {station.device && ready ? (
@@ -310,7 +328,7 @@ export default function PrinterStationScreen() {
           ) : (
             <>
               <Ionicons name="print-outline" size={20} color={Colors.white} />
-              <Text style={styles.testBtnText}>Test {station.label}</Text>
+              <Text style={styles.testBtnText}>Test {stationLabel}</Text>
             </>
           )}
         </TouchableOpacity>
@@ -320,7 +338,7 @@ export default function PrinterStationScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title={station.label} onBack={() => router.back()} />
+      <Header title={stationLabel} onBack={() => router.back()} />
 
       <View style={[styles.body, twoPanel && styles.bodyRow]}>
         {scanPanel}
@@ -331,7 +349,7 @@ export default function PrinterStationScreen() {
       <ReceiptPrintPreviewModal
         visible={previewVisible}
         onClose={() => setPreviewVisible(false)}
-        printerName={station.label}
+        printerName={stationLabel}
         mode={previewMode}
         storeName={storeSettings.name}
         storeAddress={storeSettings.address}
@@ -402,13 +420,32 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  nameInput: {
-    fontSize: Typography.xl,
+  stationName: {
+    fontSize: Typography.xxl,
     fontWeight: '800',
     color: Colors.text,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceBorder,
-    paddingVertical: Spacing.sm,
+  },
+  stationRole: {
+    color: Colors.textSecondary,
+    fontSize: Typography.sm,
+    lineHeight: 20,
+    marginBottom: Spacing.xs,
+  },
+  categoryHint: {
+    color: Colors.textMuted,
+    fontSize: Typography.xs,
+    lineHeight: 18,
+    marginBottom: Spacing.xs,
+  },
+  paymentNaBox: {
+    paddingVertical: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.surfaceBorder,
+  },
+  paymentNaText: {
+    color: Colors.textMuted,
+    fontSize: Typography.xs,
+    fontStyle: 'italic',
   },
   enableRow: {
     flexDirection: 'row',

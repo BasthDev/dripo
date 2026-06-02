@@ -1,19 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CartPanel from '../../../components/pos/CartPanel';
 import { Button, Colors, GridCard, Header, Popup, SearchBar, Spacing, Typography } from '../../../components/ui';
 import { selectCartTotal, useCartStore } from '../../../store/useCartStore';
 import { usePosStore } from '../../../store/usePosStore';
+import { useDeviceLayout } from '../../../hooks/useDeviceLayout';
 import { leaveTableSale, type TableOrderNavFrom } from '../../../utils/tableOrderFlow';
 
 export default function POSScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { isTablet } = useDeviceLayout();
   const insets = useSafeAreaInsets();
-  const isTablet = width >= 768;
 
   const products = usePosStore(state => state.products);
   const categories = usePosStore(state => state.categories);

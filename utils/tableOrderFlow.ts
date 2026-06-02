@@ -127,35 +127,28 @@ export async function saveTableOrderAndContinue(
   const table = usePosStore.getState().diningTables.find(t => t.id === input.tableId);
   if (!table || !input.items.length) return null;
 
-  const { upsertOpenTableOrder, categories, modifiers } = usePosStore.getState();
+  const { upsertOpenTableOrder } = usePosStore.getState();
 
-  const existingOpen = usePosStore
-    .getState()
-    .tableOrders.find(o => o.tableId === input.tableId && o.status === 'OPEN');
+  const mergeLines =
+    input.mergeLines ??
+    (input.saleMode === 'add'
+      ? true
+      : input.saleMode === 'edit'
+        ? false
+        : false);
 
   const orderId = upsertOpenTableOrder({
     tableId: input.tableId,
     lines: cartToTableLines(input.items),
     orderNote: input.orderNote?.trim() || undefined,
-    mergeLines: input.mergeLines ?? !!existingOpen,
+    mergeLines,
   });
 
-  const order = usePosStore.getState().tableOrders.find(o => o.id === orderId);
-  const documentNo = order?.documentNo ?? '—';
-
-  const printMeta = {
+  dispatchTableKitchenPrint(input.items, {
     tableName: table.name,
     zone: table.zone,
-    documentNo,
-    orderNote: input.orderNote?.trim() || undefined,
-  };
-
-  const isFirstOrder = !existingOpen;
-  if (isFirstOrder) {
-    dispatchTableKitchenPrint(input.items, printMeta, 'first');
-  } else {
-    dispatchTableKitchenPrint(input.items, printMeta, 'add');
-  }
+    orderId,
+  });
 
   useCartStore.getState().clearCart();
 

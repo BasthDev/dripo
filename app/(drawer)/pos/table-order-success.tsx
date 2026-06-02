@@ -66,8 +66,7 @@ export default function TableOrderSuccessScreen() {
     dispatchTableKitchenReprint(displayItems, {
       tableName: table.name,
       zone: table.zone,
-      documentNo: order.documentNo,
-      orderNote: order.orderNote,
+      orderId: order.id,
     });
   }, [order, table, displayItems]);
 

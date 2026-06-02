@@ -2,6 +2,7 @@ import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { ActivationApiError } from '../services/deviceActivationApi';
 import { useActivationStore } from '../store/useActivationStore';
+import { DEVICE_ACTIVATION_ENABLED } from '../utils/activationConfig';
 
 const HEARTBEAT_MS = 60_000;
 
@@ -15,6 +16,7 @@ export function useDeviceSessionGuard() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    if (!DEVICE_ACTIVATION_ENABLED) return;
     if (!session?.sessionToken) return;
 
     const tick = async () => {
@@ -37,6 +39,7 @@ export function useDeviceSessionGuard() {
   }, [session?.sessionToken, runHeartbeat, signOutDevice, router]);
 
   useEffect(() => {
+    if (!DEVICE_ACTIVATION_ENABLED) return;
     const onActivation = segments[0] === 'activation';
     if (!session && !onActivation) {
       router.replace('/activation');

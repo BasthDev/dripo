@@ -12,7 +12,13 @@ import {
   type KitchenTicketPayload,
 } from './bluetoothPrinter';
 import { enqueuePrint } from './printQueue';
-import { stationMatchesCategory, stationReadyToPrint } from './printerStation';
+import {
+  getStationLabel,
+  isCashierStation,
+  isKitchenSlipStation,
+  stationMatchesCategory,
+  stationReadyToPrint,
+} from './printerStation';
 
 export type ReceiptTx = {
   id: string;
@@ -34,14 +40,13 @@ export type ReceiptTx = {
   }[];
   tableName?: string;
   zone?: string;
-  documentNo?: string;
 };
 
 export type TablePrintMeta = {
   tableName: string;
   zone: string;
-  documentNo: string;
-  orderNote?: string;
+  /** Transaction / order id shown as ID on slips */
+  orderId: string;
 };
 
 function stations(): PrinterStation[] {
@@ -86,56 +91,51 @@ function queuePrintOnDevice(
   station: PrinterStation,
   run: (address: string) => Promise<boolean>
 ): void {
-  enqueuePrint(station.label, async () => {
+  enqueuePrint(getStationLabel(station), async () => {
     await run(station.device!.address);
   });
 }
 
-function buildKitchenTicket(items: CartItem[], meta: TablePrintMeta): KitchenTicketPayload {
-  const { modifiers, categories } = usePosStore.getState();
+function buildKitchenTicket(
+  items: CartItem[],
+  meta: TablePrintMeta,
+  station: PrinterStation
+): KitchenTicketPayload {
+  const { modifiers } = usePosStore.getState();
   return {
+    stationLabel: getStationLabel(station),
+    orderId: meta.orderId,
     tableName: meta.tableName,
     zone: meta.zone,
-    documentNo: meta.documentNo,
-    orderNote: meta.orderNote,
     timestamp: new Date().toISOString(),
     lines: items.map(item => {
       const modifierLabels = getAppliedModifierLabels(item.modifierIds ?? [], modifiers);
-      const category = categories.find(c => c.id === item.product.categoryId);
       return {
         name: item.product.name,
         quantity: item.quantity,
-        note: item.note,
         modifiers: modifierLabels.map(m => m.name),
-        categoryName: category?.name,
       };
     }),
   };
 }
 
-export type TableKitchenPrintMode = 'first' | 'add';
-
-/** Kitchen/bar slip on table save — not used for payment. */
-export function dispatchTableKitchenPrint(
-  items: CartItem[],
-  meta: TablePrintMeta,
-  mode: TableKitchenPrintMode
-): void {
+/** Bar/Kitchen order slip when saving items to a table (category-filtered). */
+export function dispatchTableKitchenPrint(items: CartItem[], meta: TablePrintMeta): void {
   if (!items.length) return;
 
   const { storeSettings } = usePosStore.getState();
-  const predicate =
-    mode === 'first'
-      ? (s: PrinterStation) => s.printOnTableFirstOrder
-      : (s: PrinterStation) => s.printOnTableAddItems;
 
-  for (const station of activeStations(predicate)) {
+  for (const station of activeStations(s => {
+    if (isKitchenSlipStation(s)) return s.printOnTableOrder;
+    if (isCashierStation(s)) return s.printOnTableChecker;
+    return false;
+  })) {
     const filteredItems = items.filter(i =>
       stationMatchesCategory(station, i.product.categoryId)
     );
     if (!filteredItems.length) continue;
 
-    const ticket = buildKitchenTicket(filteredItems, meta);
+    const ticket = buildKitchenTicket(filteredItems, meta, station);
     queuePrintOnDevice(station, address =>
       printKitchenTicketOnDevice(address, ticket, storeSettings)
     );
@@ -143,13 +143,13 @@ export function dispatchTableKitchenPrint(
 }
 
 export function dispatchTableKitchenReprint(items: CartItem[], meta: TablePrintMeta): void {
-  dispatchTableKitchenPrint(items, meta, 'first');
+  dispatchTableKitchenPrint(items, meta);
 }
 
-/** Full customer receipt (original format) — payment only. */
+/** Full customer receipt — payment (Cashier, category-filtered). */
 export function dispatchPaymentPrint(tx: ReceiptTx): void {
   const { storeSettings } = usePosStore.getState();
-  for (const station of activeStations(s => s.printOnPayment)) {
+  for (const station of activeStations(s => s.printOnPayment && isCashierStation(s))) {
     const filtered = filterTxForStation(tx, station);
     if (!filtered) continue;
     queuePrintOnDevice(station, address =>
@@ -162,7 +162,7 @@ export function dispatchReprint(tx: ReceiptTx, stationId?: PrinterStationId): vo
   const { storeSettings } = usePosStore.getState();
   const targets = stationId
     ? stations().filter(s => s.id === stationId && stationReadyToPrint(s))
-    : activeStations(s => s.printOnPayment);
+    : activeStations(s => s.printOnPayment && isCashierStation(s));
 
   for (const station of targets) {
     const filtered = filterTxForStation(tx, station);
@@ -181,4 +181,10 @@ export function getPrimaryPrinterDevice(): PrinterStation | null {
   return stations().find(stationReadyToPrint) ?? null;
 }
 
-export { stationMatchesCategory, stationReadyToPrint } from './printerStation';
+export {
+  stationMatchesCategory,
+  stationReadyToPrint,
+  getStationLabel,
+  isKitchenSlipStation,
+  isCashierStation,
+} from './printerStation';

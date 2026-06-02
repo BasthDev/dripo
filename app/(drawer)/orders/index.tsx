@@ -1,27 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import TableGridTile from '../../../components/orders/TableGridTile';
 import { Button, Colors, Header, Radius, Spacing, Typography } from '../../../components/ui';
+import {
+  getTableGridColumns,
+  getTableTileSize,
+  useDeviceLayout,
+} from '../../../hooks/useDeviceLayout';
 import { useAppPopup } from '../../../hooks/useAppPopup';
 import { usePosStore } from '../../../store/usePosStore';
 import { useOpenTableTotalsByTableId } from '../../../utils/tableOrder';
 import { navigateToTableOrderDetail } from '../../../utils/tableOrderFlow';
 
-const TABLE_EMPTY_BG = '#FFFFFF';
-const TABLE_OPEN_BG = '#E8D5B5';
-
 export default function TableOrdersScreen() {
   const router = useRouter();
   const { showConfirm, AppPopup } = useAppPopup();
-  const { width } = useWindowDimensions();
+  const { width } = useDeviceLayout();
   const tableZones = usePosStore(s => s.tableZones);
   const diningTables = usePosStore(s => s.diningTables);
   const tableOrders = usePosStore(s => s.tableOrders);
@@ -30,8 +26,9 @@ export default function TableOrdersScreen() {
 
   const [areaFilter, setAreaFilter] = useState<string | null>(null);
 
-  const cols = width >= 900 ? 5 : width >= 600 ? 4 : 3;
-  const tileSize = (width - Spacing.lg * 2 - Spacing.sm * (cols - 1)) / cols;
+  const cols = getTableGridColumns(width);
+  const tileSize = getTableTileSize(width, cols, Spacing.lg, Spacing.sm);
+  const tileHeight = tileSize * 0.92;
 
   const filteredTables = useMemo(() => {
     const list = areaFilter
@@ -40,6 +37,11 @@ export default function TableOrdersScreen() {
     return [...list].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
   }, [diningTables, areaFilter]);
 
+  const openCount = useMemo(
+    () => filteredTables.filter(t => tableOrders.some(o => o.tableId === t.id && o.status === 'OPEN')).length,
+    [filteredTables, tableOrders]
+  );
+
   const getOpenOrder = (tableId: string) => {
     const o = tableOrders.find(x => x.tableId === tableId);
     return o?.status === 'OPEN' ? o : undefined;
@@ -47,9 +49,7 @@ export default function TableOrdersScreen() {
 
   const handleTablePress = (tableId: string) => {
     const order = getOpenOrder(tableId);
-    if (!order) {
-      return;
-    }
+    if (!order) return;
     navigateToTableOrderDetail(router, tableId);
   };
 
@@ -69,7 +69,7 @@ export default function TableOrdersScreen() {
     <View style={styles.container}>
       <Header
         title="Table Orders"
-        subtitle="White = free · brown = open order · tap to manage"
+        subtitle={`${openCount} open · ${filteredTables.length} tables`}
         actions={[
           {
             icon: 'settings-outline',
@@ -77,6 +77,17 @@ export default function TableOrdersScreen() {
           },
         ]}
       />
+
+      <View style={styles.legendRow}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendSwatch, styles.legendFree]} />
+          <Text style={styles.legendText}>Free</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendSwatch, styles.legendOpen]} />
+          <Text style={styles.legendText}>Open order — tap to manage</Text>
+        </View>
+      </View>
 
       <View style={styles.areaBar}>
         <FlatList
@@ -104,7 +115,7 @@ export default function TableOrdersScreen() {
           <Ionicons name="grid-outline" size={48} color={Colors.textMuted} />
           <Text style={styles.emptyTitle}>No tables yet</Text>
           <Text style={styles.emptyDesc}>
-            Add tables and areas (Indoor, Outdoor…) in Manage Tables. New orders start from Sale → Save table order.
+            Add tables and areas in Manage Tables. New orders start from Sale → Save table order.
           </Text>
           <Button
             label="Manage tables"
@@ -117,42 +128,27 @@ export default function TableOrdersScreen() {
           data={filteredTables}
           keyExtractor={t => t.id}
           numColumns={cols}
+          key={`cols-${cols}`}
           contentContainerStyle={styles.grid}
           columnWrapperStyle={cols > 1 ? styles.gridRow : undefined}
           extraData={totalsByTable}
           renderItem={({ item }) => {
             const order = getOpenOrder(item.id);
-            const bg = order ? TABLE_OPEN_BG : TABLE_EMPTY_BG;
             const total = totalsByTable.get(item.id) ?? 0;
 
             return (
-              <Pressable
-                style={[
-                  styles.tableTile,
-                  {
-                    width: tileSize,
-                    height: tileSize * 0.85,
-                    backgroundColor: bg,
-                  },
-                ]}
+              <TableGridTile
+                name={item.name}
+                zone={item.zone}
+                hasOrder={!!order}
+                total={total}
+                width={tileSize}
+                height={tileHeight}
                 disabled={!order}
+                hint={order ? 'Tap to manage' : undefined}
                 onPress={() => handleTablePress(item.id)}
                 onLongPress={() => handleLongPress(item.id, item.name)}
-              >
-                <Text style={styles.tableName}>{item.name}</Text>
-                <Text style={styles.tableZone}>{item.zone}</Text>
-                {order ? (
-                  <>
-                    <Text style={styles.tableStatus}>Open order</Text>
-                    {total > 0 ? (
-                      <Text style={styles.tableTotal}>Rp {total.toLocaleString()}</Text>
-                    ) : null}
-                    <Text style={styles.tapHint}>Tap to manage</Text>
-                  </>
-                ) : (
-                  <Text style={styles.tableFree}>No order</Text>
-                )}
-              </Pressable>
+              />
             );
           }}
         />
@@ -164,49 +160,27 @@ export default function TableOrdersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendSwatch: {
+    width: 12,
+    height: 12,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+  },
+  legendFree: { backgroundColor: Colors.surface },
+  legendOpen: { backgroundColor: '#F5EDE3' },
+  legendText: { color: Colors.textMuted, fontSize: 11, fontWeight: '600' },
   areaBar: { paddingLeft: Spacing.lg, paddingVertical: Spacing.sm },
   grid: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
   gridRow: { gap: Spacing.sm, marginBottom: Spacing.sm },
-  tableTile: {
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    padding: Spacing.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  tableName: {
-    color: Colors.text,
-    fontWeight: '800',
-    fontSize: Typography.md,
-    textAlign: 'center',
-  },
-  tableZone: {
-    color: Colors.textMuted,
-    fontSize: 10,
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  tableStatus: {
-    color: Colors.textSecondary,
-    fontSize: 10,
-    fontWeight: '700',
-    marginTop: 6,
-  },
-  tableTotal: {
-    color: Colors.primary,
-    fontSize: 11,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  tapHint: { color: Colors.primary, fontSize: 9, marginTop: 4, fontWeight: '600' },
-  tableFree: {
-    color: Colors.textMuted,
-    fontSize: 10,
-    marginTop: 6,
-    fontStyle: 'italic',
-  },
   empty: {
     flex: 1,
     alignItems: 'center',

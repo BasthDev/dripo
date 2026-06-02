@@ -2,13 +2,12 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import {
-  Button,
   Colors,
   EmptyStateCard,
   FlatListCard,
   Header,
   SearchBar,
-  Spacing,
+  Spacing
 } from '../../components/ui';
 import { usePosStore } from '../../store/usePosStore';
 import { formatCostPerUnit, formatStockDisplay } from '../../utils/ingredientCost';
@@ -27,22 +26,22 @@ export default function IngredientsScreen() {
       <Header
         title="Ingredients"
         actions={[
-          {
-            icon: 'cart-outline',
-            onPress: () => router.push('/procurement/purchases'),
-          },
+          // {
+          //   icon: 'cart-outline',
+          //   onPress: () => router.push('/procurement/purchases'),
+          // },
           { icon: 'add', onPress: () => router.push('/ingredients/add') },
         ]}
       />
 
-      <View style={styles.topActions}>
+      {/* <View style={styles.topActions}>
         <Button
           label="Add new ingredient"
           variant="primary"
           iconLeft="add"
           onPress={() => router.push('/ingredients/add')}
         />
-      </View>
+      </View> */}
 
       <View style={styles.searchWrap}>
         <SearchBar

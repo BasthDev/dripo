@@ -1,33 +1,33 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useMemo } from 'react';
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    useWindowDimensions,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import OrderCartSummary from '../../../components/pos/OrderCartSummary';
 import { Button, Colors, Header, Radius, Spacing, Typography } from '../../../components/ui';
+import { useDeviceLayout } from '../../../hooks/useDeviceLayout';
 import { useAppPopup } from '../../../hooks/useAppPopup';
 import { getCartLineUnitPrice } from '../../../store/useCartStore';
 import { usePosStore } from '../../../store/usePosStore';
 import {
-    dispatchTableKitchenReprint,
-    hasAnyPrinterConfigured,
+  dispatchTableKitchenReprint,
+  hasAnyPrinterConfigured,
 } from '../../../utils/printerRouting';
 import { tableLinesToCart } from '../../../utils/tableOrder';
 import {
-    navigateToAddTableItems,
-    navigateToEditTable,
-    navigateToPayTable,
-    TABLE_ORDER_ROUTES,
+  navigateToAddTableItems,
+  navigateToEditTable,
+  navigateToPayTable,
+  TABLE_ORDER_ROUTES,
 } from '../../../utils/tableOrderFlow';
 
 export default function TableOrderDetailScreen() {
   const router = useRouter();
   const { tableId = '' } = useLocalSearchParams<{ tableId: string }>();
-  const { width, height } = useWindowDimensions();
+  const { isWideLayout, isPhone } = useDeviceLayout();
   const { showMessage, AppPopup } = useAppPopup();
 
   const table = usePosStore(s => s.diningTables.find(t => t.id === tableId));
@@ -36,8 +36,6 @@ export default function TableOrderDetailScreen() {
   );
   const products = usePosStore(s => s.products);
   const modifiers = usePosStore(s => s.modifiers);
-  const categories = usePosStore(s => s.categories);
-  const isWide = width >= 768 || width > height;
 
   const cartItems = useMemo(() => {
     if (!order?.lines.length) return [];
@@ -77,8 +75,7 @@ export default function TableOrderDetailScreen() {
       dispatchTableKitchenReprint(cartItems, {
         tableName: table.name,
         zone: table.zone,
-        documentNo: order.documentNo,
-        orderNote: order.orderNote,
+        orderId: order.id,
       });
       showMessage({
         title: 'Queued',
@@ -93,14 +90,7 @@ export default function TableOrderDetailScreen() {
         iconColor: Colors.error,
       });
     }
-  }, [
-    order,
-    table,
-    cartItems,
-    categories,
-    modifiers,
-    showMessage,
-  ]);
+  }, [order, table, cartItems, showMessage]);
 
   if (!table) {
     return (
@@ -147,48 +137,81 @@ export default function TableOrderDetailScreen() {
     }
   };
 
-  const actionPanel = (
-    <View style={[styles.actionsPanel, !isWide && styles.actionsPanelStacked]}>
-      
-      <Button
-        style={{ height: 100 }}
-        label="Payment"
-        variant="success"
-        iconLeft="card-outline"
-        fullWidth
-        onPress={handlePayment}
+  const orderSummary = (
+    <>
+      {order.orderNote ? (
+        <View style={styles.noteBox}>
+          <Text style={styles.noteLabel}>Order note</Text>
+          <Text style={styles.noteText}>{order.orderNote}</Text>
+        </View>
+      ) : null}
+      <OrderCartSummary
+        items={cartItems}
+        modifiers={modifiers}
+        total={total}
+        title="Table order"
+        style={[styles.cartSummary, isPhone && styles.cartSummaryPhone]}
       />
+    </>
+  );
+
+  const actionButtons = [
+    {
+      key: 'pay',
+      label: 'Payment',
+      variant: 'success' as const,
+      icon: 'card-outline' as const,
+      onPress: handlePayment,
+    },
+    {
+      key: 'add',
+      label: 'Add item',
+      variant: 'primary' as const,
+      icon: 'add-circle-outline' as const,
+      onPress: () => navigateToAddTableItems(router, tableId),
+    },
+    {
+      key: 'edit',
+      label: 'Edit items',
+      variant: 'outline' as const,
+      icon: 'create-outline' as const,
+      onPress: () => navigateToEditTable(router, tableId),
+    },
+    {
+      key: 'print',
+      label: 'Reprint',
+      variant: 'outline' as const,
+      icon: 'print-outline' as const,
+      onPress: () => void handleReprint(),
+    },
+  ];
+
+  const actions = (
+    <View style={[styles.actionsPanel, isPhone && styles.actionsPanelPhone]}>
+      <View style={[styles.actionsGrid, isPhone && styles.actionsGridPhone]}>
+        {actionButtons.map(btn => (
+          <View
+            key={btn.key}
+            style={isPhone ? styles.actionCellPhone : styles.actionCellWide}
+          >
+            <Button
+              label={btn.label}
+              variant={btn.variant}
+              iconLeft={btn.icon}
+              fullWidth
+              onPress={btn.onPress}
+              style={styles.actionBtn}
+            />
+          </View>
+        ))}
+      </View>
       <Button
-        style={{ height: 100 }}
-        label="Add item"
-        variant="primary"
-        iconLeft="add-circle-outline"
-        fullWidth
-        onPress={() => navigateToAddTableItems(router, tableId)}
-      />
-      <Button
-        style={{ height: 100 }}
-        label="Edit items"
-        variant="outline"
-        iconLeft="create-outline"
-        fullWidth
-        onPress={() => navigateToEditTable(router, tableId)}
-      />
-      <Button
-        style={{ height: 100 }}
-        label="Reprint"
-        variant="outline"
-        iconLeft="print-outline"
-        fullWidth
-        onPress={() => void handleReprint()}
-      />
-      <Button
-        style={{ height: 100 }}
-        label="Bact to Sale"
+        label="Back to Sale"
         variant="outline"
         iconLeft="bag-handle-outline"
         fullWidth
         onPress={() => router.replace('/pos')}
+        style={styles.actionBtn}
       />
     </View>
   );
@@ -201,34 +224,21 @@ export default function TableOrderDetailScreen() {
         onBack={() => router.back()}
       />
 
-      <View style={[styles.body, isWide && styles.bodyWide]}>
-        <View style={[styles.itemsPanel, isWide && styles.itemsPanelWide]}>
-          {order.orderNote ? (
-            <View style={styles.noteBox}>
-              <Text style={styles.noteLabel}>Order note</Text>
-              <Text style={styles.noteText}>{order.orderNote}</Text>
-            </View>
-          ) : null}
-          <OrderCartSummary
-            items={cartItems}
-            modifiers={modifiers}
-            total={total}
-            title="Table order"
-            style={styles.cartSummary}
-          />
+      {isWideLayout ? (
+        <View style={styles.bodyWide}>
+          <View style={styles.itemsPanelWide}>{orderSummary}</View>
+          {actions}
         </View>
-
-        {isWide ? (
-          actionPanel
-        ) : (
-          <ScrollView
-            contentContainerStyle={styles.actionsScroll}
-            showsVerticalScrollIndicator={false}
-          >
-            {actionPanel}
-          </ScrollView>
-        )}
-      </View>
+      ) : (
+        <ScrollView
+          style={styles.bodyScroll}
+          contentContainerStyle={styles.bodyScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {orderSummary}
+          {actions}
+        </ScrollView>
+      )}
       <AppPopup />
     </View>
   );
@@ -243,20 +253,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
   },
   backBtn: { marginHorizontal: Spacing.lg, marginTop: Spacing.lg },
-  body: { flex: 1, padding: Spacing.lg, gap: Spacing.lg },
-  bodyWide: { flexDirection: 'row', alignItems: 'stretch' },
-  itemsPanel: {
-    flex: 1,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
+  bodyScroll: { flex: 1 },
+  bodyScrollContent: {
+    padding: Spacing.lg,
+    gap: Spacing.lg,
+    paddingBottom: Spacing.xxxl,
   },
-  itemsPanelWide: { flex: 2 },
+  bodyWide: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    padding: Spacing.lg,
+    gap: Spacing.lg,
+  },
+  itemsPanelWide: {
+    flex: 1,
+    minWidth: 0,
+  },
   cartSummary: {
     flex: 1,
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.surfaceBorder,
     overflow: 'hidden',
+    minHeight: 320,
+  },
+  cartSummaryPhone: {
+    flex: 0,
+    minHeight: 280,
+    maxHeight: 420,
   },
   noteBox: {
     marginBottom: Spacing.sm,
@@ -274,8 +299,8 @@ const styles = StyleSheet.create({
   },
   noteText: { color: Colors.text, fontSize: Typography.sm },
   actionsPanel: {
-    flex: 1,
-    maxWidth: 320,
+    width: 300,
+    maxWidth: '36%',
     justifyContent: 'flex-start',
     gap: Spacing.md,
     padding: Spacing.lg,
@@ -284,11 +309,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.surfaceBorder,
   },
-  actionsPanelStacked: {
-    flex: 0,
+  actionsPanelPhone: {
+    width: '100%',
     maxWidth: '100%',
-    justifyContent: 'flex-start',
-    paddingVertical: Spacing.md,
+    flex: 0,
+    padding: Spacing.md,
   },
-  actionsScroll: { flexGrow: 0 },
+  actionsGrid: {
+    gap: Spacing.sm,
+  },
+  actionsGridPhone: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  actionCellPhone: {
+    width: '48%',
+    flexGrow: 1,
+  },
+  actionCellWide: {
+    width: '100%',
+  },
+  actionBtn: {
+    minHeight: 52,
+  },
 });

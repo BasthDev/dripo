@@ -168,6 +168,7 @@ export default function ManageTablesScreen() {
           <Text style={styles.preview}>Preview: {previewNames()}</Text>
         ) : null}
         <Button
+          style={{ marginTop: Spacing.xxl }}
           label="Create tables"
           variant="primary"
           iconLeft="add-circle-outline"

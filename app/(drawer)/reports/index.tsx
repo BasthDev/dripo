@@ -32,13 +32,13 @@ const analyticsItems: MenuItem[] = [
 ];
 
 const activityItems: MenuItem[] = [
-  {
-    title: 'Purchases',
-    desc: 'Orders, receive stock, and history',
-    icon: 'cart-outline',
-    color: Colors.primary,
-    path: '/procurement/purchases',
-  },
+  // {
+  //   title: 'Purchases',
+  //   desc: 'Orders, receive stock, and history',
+  //   icon: 'cart-outline',
+  //   color: Colors.primary,
+  //   path: '/procurement/purchases',
+  // },
   {
     title: 'Expenses',
     desc: 'COGS from purchases + operating costs',

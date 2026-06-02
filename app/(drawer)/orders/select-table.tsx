@@ -1,36 +1,26 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
-import {
-  Button,
-  Colors,
-  Header,
-  Radius,
-  Spacing,
-  Typography,
-} from '../../../components/ui';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import TableGridTile from '../../../components/orders/TableGridTile';
+import { Button, Colors, Header, Spacing } from '../../../components/ui';
+import { formatRp } from '../../../utils/formatCurrency';
 import { selectCartTotal, useCartStore } from '../../../store/useCartStore';
 import { usePosStore } from '../../../store/usePosStore';
+import {
+  getTableGridColumns,
+  getTableTileSize,
+  useDeviceLayout,
+} from '../../../hooks/useDeviceLayout';
 import { useOpenTableTotalsByTableId } from '../../../utils/tableOrder';
 import {
   saveTableOrderAndContinue,
   type TableOrderNavFrom,
 } from '../../../utils/tableOrderFlow';
 
-const TABLE_EMPTY_BG = '#FFFFFF';
-const TABLE_OPEN_BG = '#E8D5B5';
-
 export default function SelectTableScreen() {
   const router = useRouter();
   const { from = 'pos' } = useLocalSearchParams<{ from?: TableOrderNavFrom }>();
-  const { width } = useWindowDimensions();
+  const { width } = useDeviceLayout();
   const { items, orderNote } = useCartStore();
   const cartTotal = useCartStore(selectCartTotal);
   const tableZones = usePosStore(s => s.tableZones);
@@ -40,8 +30,9 @@ export default function SelectTableScreen() {
 
   const [areaFilter, setAreaFilter] = useState<string | null>(null);
 
-  const cols = width >= 900 ? 5 : width >= 600 ? 4 : 3;
-  const tileSize = (width - Spacing.lg * 2 - Spacing.sm * (cols - 1)) / cols;
+  const cols = getTableGridColumns(width);
+  const tileSize = getTableTileSize(width, cols, Spacing.lg, Spacing.sm);
+  const tileHeight = tileSize * 0.92;
 
   useFocusEffect(
     useCallback(() => {
@@ -83,11 +74,12 @@ export default function SelectTableScreen() {
         onBack={() => router.back()}
       />
 
-      {/* <View style={styles.summary}>
+      <View style={styles.summary}>
         <Text style={styles.summaryText}>
-          {items.length} item(s) · Rp {cartTotal.toLocaleString()}
+          {items.length} item(s) · {formatRp(cartTotal)}
         </Text>
-      </View> */}
+        <Text style={styles.summaryHint}>Tap a table to assign this order</Text>
+      </View>
 
       <View style={styles.areaBar}>
         <FlatList
@@ -124,34 +116,19 @@ export default function SelectTableScreen() {
           extraData={totalsByTable}
           renderItem={({ item }) => {
             const hasOpen = !!getOpenOrder(item.id);
-            const bg = hasOpen ? TABLE_OPEN_BG : TABLE_EMPTY_BG;
             const existingTotal = totalsByTable.get(item.id) ?? 0;
 
             return (
-              <Pressable
-                style={[
-                  styles.tableTile,
-                  {
-                    width: tileSize,
-                    height: tileSize * 0.85,
-                    backgroundColor: bg,
-                  },
-                ]}
+              <TableGridTile
+                name={item.name}
+                zone={item.zone}
+                hasOrder={hasOpen}
+                total={existingTotal}
+                width={tileSize}
+                height={tileHeight}
+                hint={hasOpen ? 'Will add items' : 'Assign here'}
                 onPress={() => assignTable(item.id)}
-              >
-                <Text style={styles.tableName}>{item.name}</Text>
-                <Text style={styles.zoneLabel}>{item.zone}</Text>
-                {hasOpen ? (
-                  <>
-                    <Text style={styles.inUse}>Has open order — will update</Text>
-                    {existingTotal > 0 ? (
-                      <Text style={styles.tableTotal}>Rp {existingTotal.toLocaleString()}</Text>
-                    ) : null}
-                  </>
-                ) : (
-                  <Text style={styles.free}>Available</Text>
-                )}
-              </Pressable>
+              />
             );
           }}
         />
@@ -162,35 +139,16 @@ export default function SelectTableScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  summary: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
-  summaryText: { color: Colors.textSecondary, fontWeight: '600' },
+  summary: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    gap: 2,
+  },
+  summaryText: { color: Colors.text, fontWeight: '800', fontSize: 15 },
+  summaryHint: { color: Colors.textMuted, fontSize: 12 },
   areaBar: { paddingLeft: Spacing.lg, paddingBottom: Spacing.sm },
   grid: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
   gridRow: { gap: Spacing.sm, marginBottom: Spacing.sm },
-  tableTile: {
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    padding: Spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.sm,
-  },
-  tableName: {
-    color: Colors.text,
-    fontWeight: '800',
-    fontSize: Typography.md,
-    textAlign: 'center',
-  },
-  zoneLabel: { color: Colors.textMuted, fontSize: 10, marginTop: 4 },
-  tableTotal: {
-    color: Colors.primary,
-    fontSize: 10,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-  inUse: { color: Colors.textSecondary, fontSize: 9, marginTop: 4, textAlign: 'center' },
-  free: { color: Colors.textMuted, fontSize: 9, marginTop: 4, fontStyle: 'italic' },
   empty: { flex: 1, padding: Spacing.xl, alignItems: 'center' },
   emptyText: { color: Colors.textMuted, textAlign: 'center' },
 });

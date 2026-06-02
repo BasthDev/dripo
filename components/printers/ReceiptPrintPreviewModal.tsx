@@ -34,6 +34,7 @@ export default function ReceiptPrintPreviewModal({
   storePhone,
 }: Props) {
   const receiptHeightAnim = useRef(new Animated.Value(0)).current;
+  const now = new Date();
 
   useEffect(() => {
     if (!visible) {
@@ -51,7 +52,7 @@ export default function ReceiptPrintPreviewModal({
 
   const height = receiptHeightAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, mode === 'payment' ? 420 : 280],
+    outputRange: [0, mode === 'payment' ? 420 : 300],
   });
 
   return (
@@ -79,8 +80,12 @@ export default function ReceiptPrintPreviewModal({
                   {storeAddress ? <Text style={styles.meta}>{storeAddress}</Text> : null}
                   {storePhone ? <Text style={styles.meta}>Tel: {storePhone}</Text> : null}
                   <Text style={styles.divider}>- - - - - - - - - - - - - -</Text>
-                  <Text style={styles.meta}>Table: 5 · Hall</Text>
-                  <Text style={styles.meta}>Order: TO-0001</Text>
+                  <Text style={styles.metaLeft}>ID: #TEST1234</Text>
+                  <Text style={styles.metaLeft}>
+                    Date: {now.toLocaleDateString()}, {now.toLocaleTimeString()}
+                  </Text>
+                  <Text style={styles.metaLeft}>Table: 5 (Hall)</Text>
+                  <Text style={styles.metaLeft}>Payment: CASH</Text>
                   <Text style={styles.divider}>- - - - - - - - - - - - - -</Text>
                   <View style={styles.lineRow}>
                     <Text style={styles.lineLeft}>1x Latte</Text>
@@ -99,14 +104,18 @@ export default function ReceiptPrintPreviewModal({
                 </>
               ) : (
                 <>
-                  <Text style={styles.tableBig}>TABLE 5 · Hall</Text>
+                  <Text style={styles.stationBig}>{printerName.toUpperCase()}</Text>
                   <Text style={styles.divider}>- - - - - - - - - - - - - -</Text>
-                  <Text style={styles.meta}>Order: TO-0001</Text>
-                  <Text style={styles.meta}>{new Date().toLocaleString()}</Text>
+                  <Text style={styles.metaLeft}>ID: #TEST1234</Text>
+                  <Text style={styles.metaLeft}>
+                    Date: {now.toLocaleDateString()}, {now.toLocaleTimeString()}
+                  </Text>
+                  <Text style={styles.metaLeft}>Table: 5 (Hall)</Text>
                   <Text style={styles.divider}>- - - - - - - - - - - - - -</Text>
                   <Text style={styles.itemBig}>2x Latte</Text>
                   <Text style={styles.subItem}>   + Oat milk</Text>
                   <Text style={styles.itemBig}>1x Burger</Text>
+                  <Text style={styles.divider}>- - - - - - - - - - - - - -</Text>
                 </>
               )}
             </Animated.View>
@@ -161,7 +170,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
   },
-  tableBig: {
+  stationBig: {
     color: '#000',
     fontSize: 18,
     fontWeight: '800',
@@ -169,6 +178,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   meta: { color: '#444', fontSize: 9, textAlign: 'center' },
+  metaLeft: { color: '#444', fontSize: 9, textAlign: 'left', marginBottom: 2 },
   divider: { color: '#000', fontSize: 11, textAlign: 'center', marginVertical: 8 },
   lineRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 3 },
   lineLeft: { color: '#000', fontSize: 11, fontWeight: '600' },

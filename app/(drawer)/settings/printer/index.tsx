@@ -11,7 +11,12 @@ import {
 } from 'react-native';
 import { Colors, Header, Radius, Spacing, Typography } from '../../../../components/ui';
 import { usePosStore } from '../../../../store/usePosStore';
-import { categorySummary, stationReadyToPrint } from '../../../../utils/printerStation';
+import {
+  categorySummary,
+  getStationLabel,
+  isCashierStation,
+  stationReadyToPrint,
+} from '../../../../utils/printerStation';
 import { getPrintQueuePending, subscribePrintQueue } from '../../../../utils/printQueue';
 
 export default function PrinterListScreen() {
@@ -28,10 +33,11 @@ export default function PrinterListScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Cashier, Kitchen & Bar</Text>
+          <Text style={styles.heroTitle}>Cashier, Bar & Kitchen</Text>
           <Text style={styles.heroText}>
-            Rename each station (e.g. Bar, Kitchen, Cashier). Kitchen and bar print short
-            order slips; cashier prints the full receipt at payment.
+            Pair one Bluetooth printer per station. Assign product categories so each
+            item routes to the right printer. Bar and Kitchen print short order slips when
+            you save a table; Cashier prints the full receipt at payment.
           </Text>
         </View>
 
@@ -44,6 +50,8 @@ export default function PrinterListScreen() {
 
         {printerStations.map(station => {
           const ready = stationReadyToPrint(station);
+          const label = getStationLabel(station);
+          const cashier = isCashierStation(station);
           return (
             <TouchableOpacity
               key={station.id}
@@ -59,17 +67,17 @@ export default function PrinterListScreen() {
                 />
               </View>
               <View style={styles.cardBody}>
-                <Text style={styles.cardTitle}>{station.label}</Text>
+                <Text style={styles.cardTitle}>{label}</Text>
                 <Text style={styles.cardSub} numberOfLines={1}>
                   {station.device?.name ?? 'Tap to pair Bluetooth'}
                 </Text>
                 <Text style={styles.cardMeta}>{categorySummary(station, categories)}</Text>
                 <View style={styles.pills}>
-                  {station.printOnTableFirstOrder ? (
-                    <Pill text="Save order" on />
+                  {cashier && station.printOnTableChecker ? (
+                    <Pill text="Checker" on />
                   ) : null}
-                  {station.printOnTableAddItems ? (
-                    <Pill text="Add items" on />
+                  {!cashier && station.printOnTableOrder ? (
+                    <Pill text="Add to table" on />
                   ) : null}
                   {station.printOnPayment ? <Pill text="Payment" on /> : null}
                 </View>
@@ -81,9 +89,18 @@ export default function PrinterListScreen() {
 
         <View style={styles.tipBox}>
           <Text style={styles.tipTitle}>Quick guide</Text>
-          <Text style={styles.tipLine}>• Save order — first time on an empty table</Text>
-          <Text style={styles.tipLine}>• Add items — only new lines when adding more</Text>
-          <Text style={styles.tipLine}>• Payment — full receipt at checkout</Text>
+          <Text style={styles.tipLine}>
+            • Add to table — Bar/Kitchen order slips when saving a table
+          </Text>
+          <Text style={styles.tipLine}>
+            • Checker — Cashier minimal slip to confirm items at the table
+          </Text>
+          <Text style={styles.tipLine}>
+            • Payment — full receipt with totals (Cashier)
+          </Text>
+          <Text style={styles.tipLine}>
+            • Categories — e.g. Coffee → Bar, Food → Kitchen
+          </Text>
         </View>
       </ScrollView>
     </View>

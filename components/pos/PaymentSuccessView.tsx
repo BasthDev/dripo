@@ -4,10 +4,10 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    useWindowDimensions,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDeviceLayout } from '../../hooks/useDeviceLayout';
 import { Button, Colors, Radius, Shadow, Spacing, Typography } from '../ui';
 
 export type TableOrderLineSummary = {
@@ -333,8 +333,7 @@ export default function PaymentSuccessView({
   printLabel,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
-  const isLandscape = width > height;
+  const { isWideLayout: isLandscape, isSplitLayout } = useDeviceLayout();
   const isTableOrder = data.mode === 'tableOrder';
 
   const total = Number(data.total) || 0;

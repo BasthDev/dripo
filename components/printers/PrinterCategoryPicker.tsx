@@ -29,8 +29,8 @@ export default function PrinterCategoryPicker({
     <View style={styles.wrap}>
       <View style={styles.headerRow}>
         <Text style={styles.hint}>
-          Choose which product categories this printer handles. Nothing prints until at
-          least one is selected.
+          Tap categories this printer should receive. Nothing prints until at least one is
+          selected.
         </Text>
         {categories.length > 0 ? (
           <TouchableOpacity

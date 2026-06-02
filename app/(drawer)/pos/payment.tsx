@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import uuid from 'react-native-uuid';
@@ -25,6 +24,7 @@ import {
   splitPanel60_40,
   Typography,
 } from '../../../components/ui';
+import { useDeviceLayout } from '../../../hooks/useDeviceLayout';
 import { usePreventScreenBack } from '../../../hooks/usePreventScreenBack';
 import { useCartStore } from '../../../store/useCartStore';
 import { usePosStore } from '../../../store/usePosStore';
@@ -54,7 +54,7 @@ export default function PaymentScreen() {
     from?: string;
     tableId?: string;
   }>();
-  const { width, height } = useWindowDimensions();
+  const { isWideLayout: showSplit } = useDeviceLayout();
 
   const {
     getTotal,
@@ -96,10 +96,6 @@ export default function PaymentScreen() {
   const canPay = method !== 'CASH' || cashParsed >= total;
 
   usePreventScreenBack(paymentComplete);
-
-  const isLandscape = width > height;
-  const isTablet = width >= 768;
-  const showSplit = isLandscape || isTablet;
 
   const paymentBackTableId = tableIdParam || activeTableId;
 
@@ -221,7 +217,6 @@ export default function PaymentScreen() {
       orderNote: trimmedOrderNote || undefined,
       tableName: tableForPrint?.name,
       zone: tableForPrint?.zone,
-      documentNo: openOrder?.documentNo,
     };
 
     addTransaction(tx);

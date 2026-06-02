@@ -21,13 +21,13 @@ export default function SettingsIndex() {
       color: Colors.primary,
       path: '/settings/store',
     },
-    {
-      title: 'Product Modifiers',
-      desc: 'Extra shot, add-ons — price & ingredient changes',
-      icon: 'options-outline',
-      color: Colors.secondary,
-      path: '/modifiers',
-    },
+    // {
+    //   title: 'Product Modifiers',
+    //   desc: 'Extra shot, add-ons — price & ingredient changes',
+    //   icon: 'options-outline',
+    //   color: Colors.secondary,
+    //   path: '/modifiers',
+    // },
     {
       title: 'Printer Settings',
       desc: 'Kitchen / bar / cashier — see docs/PRINTER_SETUP.md',
@@ -35,13 +35,13 @@ export default function SettingsIndex() {
       color: '#00B894',
       path: '/settings/printer',
     },
-    {
-      title: 'Device license',
-      desc: 'One device per outlet — see docs/DEVICE_ACTIVATION_OTP.md',
-      icon: 'shield-checkmark-outline',
-      color: Colors.warning,
-      path: '/settings/device-license',
-    },
+    // {
+    //   title: 'Device license',
+    //   desc: 'One device per outlet — see docs/DEVICE_ACTIVATION_OTP.md',
+    //   icon: 'shield-checkmark-outline',
+    //   color: Colors.warning,
+    //   path: '/settings/device-license',
+    // },
   ];
 
   const runWipe = async () => {
